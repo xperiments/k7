@@ -77,7 +77,7 @@ label_result_t label_pack_open_why(const uint8_t *bytes, size_t size, uint8_t fo
     if (design_count == 0 || design_count > LABEL_PACK_DESIGN_MAX)
         return fail(why, why_size, "the pack carries no designs, or more than 32");
     if (sheet_version != LABEL_VERSION)
-        return fail(why, why_size, "not sheet version 4");
+        return fail(why, why_size, "not sheet version 5");
     if (pack_fonts == 0)
         return fail(why, why_size, "the pack names no font table");
     if (font_count != 0 && pack_fonts != font_count) {

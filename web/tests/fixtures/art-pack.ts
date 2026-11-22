@@ -14,7 +14,6 @@ import { readArtPack, crc32, type ArtPack } from '../../src/jcard/pack';
 export interface DesignSeed {
   id: string;
   name: string;
-  inks: unknown;
   jcard: Record<string, unknown>;
 }
 
@@ -57,7 +56,6 @@ export function seedDesigns(count = 1): DesignSeed[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `k7.test-${String(index + 1).padStart(2, '0')}`,
     name: `Test design ${index + 1}`,
-    inks: neon.inks,
     jcard: { ...neon.jcard },
   }));
 }
@@ -83,13 +81,14 @@ function buildSheet(
   const templates = names.length;
   const prims = templates;
   const slots = 0;
+  /* Version 5: a 16-byte template record, the canvas row, 24-byte prim records. */
   const total =
-    32 + templates * 64 + templates * 8 * 4 + prims * 24 + slots * 8 + pool.length;
+    32 + templates * 16 + templates * 8 * 4 + prims * 24 + slots * 8 + pool.length;
   const sheet = new Uint8Array(total);
   const view = new DataView(sheet.buffer);
 
   writeFixed(sheet, 0, options.sheetMagic ?? 'K7LBL\0\0\0', 8);
-  view.setUint16(8, options.sheetVersion ?? 4, true);
+  view.setUint16(8, options.sheetVersion ?? 5, true);
   view.setUint16(10, 32, true);
   view.setUint32(12, total, true);
   // 16..20 is the sheet's CRC and is stamped below.
@@ -101,13 +100,13 @@ function buildSheet(
   view.setUint16(30, pool.length, true);
 
   const templateBase = 32;
-  const canvasBase = templateBase + templates * 64;
+  const canvasBase = templateBase + templates * 16;
   const primBase = canvasBase + templates * 8 * 4;
   const slotBase = primBase + prims * 24;
   const poolBase = slotBase + slots * 8;
 
   for (let index = 0; index < templates; index += 1) {
-    const at = templateBase + index * 64;
+    const at = templateBase + index * 16;
     view.setUint32(at, offsets[index] ?? 0, true);
     view.setUint16(at + 4, index, true);
     view.setUint16(at + 6, 1, true);
@@ -121,7 +120,7 @@ function buildSheet(
 
     const prim = primBase + index * 24;
     view.setUint8(prim, 0); // a rect
-    view.setUint8(prim + 1, 0); // paper
+    view.setUint8(prim + 1, 0); // reserved
     view.setUint8(prim + 2, 0);
     view.setUint8(prim + 3, 0);
     view.setInt16(prim + 4, 0, true);
@@ -131,7 +130,8 @@ function buildSheet(
     view.setUint16(prim + 12, 0, true);
     view.setUint16(prim + 14, 0, true);
     view.setUint32(prim + 16, 0xffffffff, true);
-    view.setUint32(prim + 20, 0, true);
+    // The prim's own colour, the neon J-card's sheet: a literal RGB888.
+    view.setUint32(prim + 20, 0x142538, true);
   }
 
   sheet.set(pool, poolBase);
@@ -158,7 +158,6 @@ export function buildPackBytes(options: PackFixtureOptions = {}): Uint8Array<Arr
   const entries = designs.slice(0, jcardsDesignCount).map((design, index) => ({
     id: design.id,
     name: design.name,
-    inks: design.inks,
     jcard:
       options.oversizedJcard && index === 0
         ? {
@@ -171,7 +170,7 @@ export function buildPackBytes(options: PackFixtureOptions = {}): Uint8Array<Arr
                 y: 0,
                 w: 100,
                 font: 'title',
-                color: 'ink',
+                color: '#242424',
                 align: 'left',
                 text: 'x'.repeat(17 * 1024),
               },
@@ -179,7 +178,7 @@ export function buildPackBytes(options: PackFixtureOptions = {}): Uint8Array<Arr
           }
         : design.jcard,
   }));
-  const document = options.jcardsOverride ?? { v: 1, designs: entries };
+  const document = options.jcardsOverride ?? { v: 2, designs: entries };
   const jcards = encoder.encode(options.jcardsRaw ?? JSON.stringify(document));
 
   const total = 128 + sheet.length + jcards.length;
@@ -191,7 +190,7 @@ export function buildPackBytes(options: PackFixtureOptions = {}): Uint8Array<Arr
   view.setUint16(10, options.headerSize ?? 128, true);
   view.setUint32(12, options.totalSize ?? total, true);
   view.setUint16(20, headerDesignCount, true);
-  view.setUint16(22, options.headerSheetVersion ?? 4, true);
+  view.setUint16(22, options.headerSheetVersion ?? 5, true);
   view.setUint16(24, fontCount, true);
   view.setUint16(26, 0, true);
   view.setUint32(28, 128, true);

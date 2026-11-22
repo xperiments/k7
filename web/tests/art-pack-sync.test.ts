@@ -113,7 +113,7 @@ describe('the cached pack', () => {
   });
 
   it('is dropped when its J-cards no longer parse, leaving the factory', async () => {
-    await putCachedArtPack({ ...PACK_A, jcards: { v: 2, designs: [] } });
+    await putCachedArtPack({ ...PACK_A, jcards: { v: 1, designs: [] } });
     resetUserJcards();
 
     await active.restoreArtPacks();

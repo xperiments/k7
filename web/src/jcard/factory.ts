@@ -5,7 +5,7 @@ import { readJcardDesign, type JcardDesign } from './model';
  * build time from the same files the Python packer turns into the embedded label sheet.
  *
  * The folder is outside the web root, so Vite resolves it through the `@k7art` alias. Only
- * the four container fields the App draws are imported: Vite's JSON named exports are
+ * the three container fields the App draws are imported: Vite's JSON named exports are
  * tree-shaken, so the label section - the sheet's, not the browser's - never reaches the
  * bundle. A design the renderer cannot draw is left out rather than failing the App's boot;
  * the K7Art's own Export and the packer are where a bad file is refused by name.
@@ -21,10 +21,6 @@ const NAMES = import.meta.glob('@k7art/*.json', {
   eager: true,
   import: 'name',
 }) as Record<string, unknown>;
-const INKS = import.meta.glob('@k7art/*.json', {
-  eager: true,
-  import: 'inks',
-}) as Record<string, unknown>;
 const JCARDS = import.meta.glob('@k7art/*.json', {
   eager: true,
   import: 'jcard',
@@ -35,7 +31,6 @@ export const FACTORY_JCARDS: readonly JcardDesign[] = Object.keys(JCARDS)
     readJcardDesign({
       id: IDS[path],
       name: NAMES[path],
-      inks: INKS[path],
       jcard: JCARDS[path],
     }),
   )

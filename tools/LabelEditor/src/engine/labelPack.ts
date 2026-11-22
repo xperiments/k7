@@ -15,9 +15,9 @@ import type { K7ArtDoc } from "./tpl";
 
 export const SHEET_MAGIC = new Uint8Array([0x4b, 0x37, 0x4c, 0x42, 0x4c, 0x00, 0x00, 0x00]); // K7LBL\0\0\0
 export const PACK_MAGIC = new Uint8Array([0x4b, 0x37, 0x41, 0x52, 0x54, 0x00, 0x00, 0x00]); // K7ART\0\0\0
-export const SHEET_VERSION = 4;
+export const SHEET_VERSION = 5;
 export const SHEET_HEADER_SIZE = 32;
-export const TEMPLATE_SIZE = 64;
+export const TEMPLATE_SIZE = 16;
 export const PRIM_SIZE = 24;
 export const SLOT_SIZE = 8;
 export const CANVAS_MAX = VOCAB.canvas;
@@ -30,10 +30,6 @@ export const PACK_ID_MAX = 16;
 export const PACK_NAME_MAX = 32;
 export const PACK_AUTHOR_MAX = 32;
 
-const ROLE_INDEX: Record<string, number> = { paper: 0, ink: 1, rule: 2 };
-for (let i = 0; i < VOCAB.bands; i++) ROLE_INDEX[`band.${i}`] = 3 + i;
-const FILL_LITERAL = 3 + VOCAB.bands;
-const TEXT_ROLES = ["ink", ...Array.from({ length: VOCAB.bands }, (_, i) => `band.${i}`)];
 const ALIGN_INDEX: Record<string, number> = { left: 0, center: 1, right: 2 };
 const SLOT_NAMES = new Set<string>(VOCAB.slots.map((s) => s.id));
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -121,7 +117,7 @@ class Pool {
  * The J-card's own refusals, ported from `jcard_errors` in tools/label_pack.py. The packer
  * never puts a J-card in the sheet; it refuses one the App could not draw.
  */
-function jcardErrors(jcard: Record<string, unknown>, did: string, bandDeclared: number): string[] {
+function jcardErrors(jcard: Record<string, unknown>, did: string): string[] {
   const errors: string[] = [];
   const add = (line: string) => errors.push(`${did}: jcard ${line}`);
 
@@ -147,6 +143,10 @@ function jcardErrors(jcard: Record<string, unknown>, did: string, bandDeclared: 
     const extra = Object.keys(parts).filter((k) => !(k in want));
     if (extra.length) add(`parts names ${extra.join(", ")}; the case is flap, spine and cover`);
   }
+
+  const background = jcard.background;
+  if (typeof background !== "string" || !HEX.test(background))
+    add(`background ${JSON.stringify(background)} is not #RRGGBB`);
 
   const faces: string[] = FROLES.map((role) => VOCAB.defaults.fonts[role].ff);
   const fonts = jcard.fonts;
@@ -180,28 +180,22 @@ function jcardErrors(jcard: Record<string, unknown>, did: string, bandDeclared: 
     const y = int(prim.y, `${did}: jcard prim ${i + 1}: y`, errors, -4096, 4096);
     const w = int(prim.w, `${did}: jcard prim ${i + 1}: w`, errors, 1, 4096);
     int(prim.rot ?? 0, `${did}: jcard prim ${i + 1}: rot`, errors, undefined, undefined, 0);
-    const roleOf = (what: "fill" | "color", allowPaper: boolean) => {
-      const role = what === "fill" ? prim.fill : (prim.color ?? "ink");
-      if (typeof role === "string" && role.startsWith("#"))
-        add(`prim ${i + 1}: ${what} ${role} is a literal colour; the J-card is role-coloured`);
-      else if (typeof role !== "string" || !(role in ROLE_INDEX))
-        add(`prim ${i + 1}: ${what} ${JSON.stringify(role)} is not a role`);
-      else if (role === "paper" && !allowPaper)
-        add(`prim ${i + 1}: ${what} paper has nothing to read against it`);
-      else if (/^band\.[0-7]$/.test(role) && Number(role.slice(5)) >= bandDeclared)
-        add(`prim ${i + 1}: ${what} ${role} is past this design's ${bandDeclared} bands`);
+    const colourOf = (what: "fill" | "color") => {
+      const colour = what === "fill" ? prim.fill : prim.color;
+      if (typeof colour !== "string" || !HEX.test(colour))
+        add(`prim ${i + 1}: ${what} ${JSON.stringify(colour)} is not #RRGGBB`);
     };
     let h = 0;
     if (kind === "rect") {
       h = int(prim.h, `${did}: jcard prim ${i + 1}: h`, errors, 1, 4096);
       int(prim.r ?? 0, `${did}: jcard prim ${i + 1}: r`, errors, 0, undefined, 0);
-      roleOf("fill", true);
+      colourOf("fill");
     } else {
       if (prim.align !== undefined && prim.align !== "left" && prim.align !== "center" && prim.align !== "right")
         add(`prim ${i + 1}: align ${JSON.stringify(prim.align)} is not left, center or right`);
       if (typeof prim.font !== "string" || !FROLES.includes(prim.font as never))
         add(`prim ${i + 1}: font ${JSON.stringify(prim.font)} is not title, numeral or caption`);
-      roleOf("color", false);
+      colourOf("color");
       if ("slot" in prim) {
         if (!["title", "artist", "meta"].includes(String(prim.slot)))
           add(`prim ${i + 1}: "${String(prim.slot)}" is not a J-card field (title, artist, meta)`);
@@ -229,7 +223,6 @@ interface PackedDesign {
   slotStart: number;
   slotCount: number;
   font: number[];
-  inks: number[];
   canvases: number[];
 }
 
@@ -253,22 +246,8 @@ function packDesign(
   const did = typeof design.id === "string" ? design.id : String(design.id);
 
   if (design.format !== "k7art") errors.push(`${did}: format is ${JSON.stringify(design.format)}, not "k7art"`);
-  if (design.v !== 1) errors.push(`${did}: v is not 1`);
-
-  const inks = isObject(design.inks) ? design.inks : {};
-  if (!isObject(design.inks))
-    errors.push(`${did}: no inks -- a design without colours is shapes only`);
-  const paper = hex(inks.paper, `${did}: inks.paper`, errors, true);
-  const ink = hex(inks.ink, `${did}: inks.ink`, errors) ?? 0;
-  const rule = hex(inks.rule, `${did}: inks.rule`, errors) ?? 0;
-  let band = Array.isArray(inks.band) ? inks.band : [];
-  if (!Array.isArray(inks.band) || inks.band.length < 4 || inks.band.length > VOCAB.bands) {
-    errors.push(`${did}: inks.band must be four to eight colours`);
-    band = ["#000000", "#000000", "#000000", "#000000"];
-  }
-  const bandDeclared = band.length;
-  const bandValues = band.map((c, i) => hex(c, `${did}: inks.band[${i}]`, errors) ?? 0);
-  while (bandValues.length < VOCAB.bands) bandValues.push(0);
+  if (design.v !== 2)
+    errors.push(`${did}: v is not 2 -- open a v1 design in the editor and export it`);
 
   let designName = typeof design.name === "string" ? design.name : "";
   if (!designName.trim()) {
@@ -280,11 +259,22 @@ function packDesign(
   if (!isObject(design.label)) errors.push(`${did}: no label -- the design is the pair`);
 
   if (!isObject(design.jcard)) errors.push(`${did}: no jcard -- the design is the pair`);
-  else errors.push(...jcardErrors(design.jcard, did, bandDeclared));
+  else errors.push(...jcardErrors(design.jcard, did));
 
   const space = isObject(label.space) ? label.space : {};
   if (space.w !== VOCAB.space.w || space.h !== VOCAB.space.h)
     errors.push(`${did}: space is ${space.w}x${space.h}, not ${VOCAB.space.w}x${VOCAB.space.h}`);
+
+  let maskColour: number | null = null;
+  let maskRadius = 0;
+  const mask = label.mask;
+  if (mask !== undefined) {
+    if (!isObject(mask)) errors.push(`${did}: mask must be an object with color and r`);
+    else {
+      maskColour = hex(mask.color, `${did}: mask.color`, errors);
+      maskRadius = int(mask.r ?? 0, `${did}: mask.r`, errors, 0, undefined, 0);
+    }
+  }
 
   const aperture = label.aperture;
   if (aperture !== undefined) {
@@ -293,6 +283,8 @@ function packDesign(
     const want = [VOCAB.aperture.x, VOCAB.aperture.y, VOCAB.aperture.w, VOCAB.aperture.h, VOCAB.aperture.r];
     if (got.some((v, i) => v !== want[i]))
       errors.push(`${did}: aperture ${JSON.stringify(got)} is not the Card's window ${JSON.stringify(want)}`);
+    if (mask === undefined)
+      errors.push(`${did}: aperture without a mask -- the window is cut out of the paper`);
   }
 
   const fonts = isObject(label.fonts) ? label.fonts : {};
@@ -350,12 +342,14 @@ function packDesign(
 
   let prims = Array.isArray(label.prims) ? label.prims : [];
   if (!Array.isArray(label.prims) || !label.prims.length) errors.push(`${did}: no prims`);
-  if (prims.length > VOCAB.limits.prims)
-    errors.push(`${did}: ${prims.length} prims, more than the ${VOCAB.limits.prims} allowed`);
+  const sheetPrims = prims.length + (mask !== undefined ? 1 : 0);
+  if (sheetPrims > VOCAB.limits.prims)
+    errors.push(`${did}: ${sheetPrims} prims (the mask's rect included), more than the ${VOCAB.limits.prims} allowed`);
 
   const outPrims: Uint8Array[] = [];
+  if (mask !== undefined && maskColour !== null)
+    outPrims.push(primRecord(0, 0, 0, 0, 0, VOCAB.space.w, VOCAB.space.h, maskRadius, 0, 0xffffffff, maskColour));
   const usedSlots = new Set<string>();
-  const literals: Array<{ tag: string; notes: unknown }> = [];
 
   prims.forEach((raw, i) => {
     const prim = isObject(raw) ? raw : {};
@@ -368,24 +362,9 @@ function packDesign(
     if (kind === "rect") {
       const h = int(prim.h, `${tag}: h`, errors, VOCAB.coords.h[0], VOCAB.coords.h[1]);
       const r = int(prim.r ?? 0, `${tag}: r`, errors, 0, undefined, 0);
-      let fillIndex = 0;
-      let literal = 0;
-      const fill = prim.fill;
-      if (typeof fill === "string" && fill in ROLE_INDEX) {
-        fillIndex = ROLE_INDEX[fill];
-        if (/^band\.[0-7]$/.test(fill) && Number(fill.slice(5)) >= bandDeclared)
-          errors.push(`${tag}: fill ${fill} is past this design's ${bandDeclared} bands`);
-        if (fill === "paper" && paper === null)
-          errors.push(`${tag}: fills with paper, and this design has no paper colour`);
-      } else if (typeof fill === "string" && HEX.test(fill)) {
-        fillIndex = FILL_LITERAL;
-        literal = parseInt(fill.slice(1), 16);
-        literals.push({ tag, notes: label.notes ?? [] });
-      } else {
-        errors.push(`${tag}: fill ${JSON.stringify(fill)} is not a role and not #RRGGBB`);
-      }
+      const colour = hex(prim.fill, `${tag}: fill`, errors) ?? 0;
       outPrims.push(
-        primRecord(0, fillIndex, 0, 0, x, y, w, h, r, rot, 0xffffffff, literal),
+        primRecord(0, 0, 0, x, y, w, h, r, rot, 0xffffffff, colour),
       );
       return;
     }
@@ -393,15 +372,7 @@ function packDesign(
       errors.push(`${tag}: t must be rect or text`);
       return;
     }
-    const color = prim.color;
-    let fillIndex = ROLE_INDEX.ink;
-    if (typeof color !== "string" || !TEXT_ROLES.includes(color))
-      errors.push(`${tag}: colour ${JSON.stringify(color)} is not ink or a band`);
-    else {
-      fillIndex = ROLE_INDEX[color];
-      if (/^band\.[0-7]$/.test(color) && Number(color.slice(5)) >= bandDeclared)
-        errors.push(`${tag}: colour ${color} is past this design's ${bandDeclared} bands`);
-    }
+    const colour = hex(prim.color, `${tag}: colour`, errors) ?? 0;
     const role = prim.font;
     const fontIndexValue =
       typeof role === "string" ? FROLES.indexOf(role as (typeof FROLES)[number]) : -1;
@@ -431,7 +402,6 @@ function packDesign(
     outPrims.push(
       primRecord(
         kindIndex,
-        fillIndex,
         Math.max(fontIndexValue, 0),
         alignValue ?? 0,
         x,
@@ -441,22 +411,13 @@ function packDesign(
         0,
         rot,
         textOff,
-        0,
+        colour,
       ),
     );
   });
 
   for (const name of slotMax.keys())
     if (!usedSlots.has(name)) errors.push(`${did}: slot "${name}" is declared but no text uses it`);
-  if (literals.length > 1)
-    errors.push(`${did}: ${literals.length} layers use their own colour; a design may have one`);
-  if (
-    literals.length === 1 &&
-    !(Array.isArray(literals[0].notes) ? literals[0].notes : []).some(
-      (n) => typeof n === "string" && n.trim(),
-    )
-  )
-    errors.push(`${did}: ${literals[0].tag} uses its own colour and no note says why`);
 
   if (errors.length) throw new PackError(errors);
 
@@ -476,7 +437,6 @@ function packDesign(
       primCount: outPrims.length,
       slotCount: slotsOut.length,
       font,
-      inks: [paper ?? 0, ink, rule, ...bandValues],
       canvases,
     },
     prims: outPrims,
@@ -486,7 +446,6 @@ function packDesign(
 
 function primRecord(
   kind: number,
-  fill: number,
   font: number,
   align: number,
   x: number,
@@ -496,11 +455,11 @@ function primRecord(
   r: number,
   rot: number,
   textOff: number,
-  literal: number,
+  colour: number,
 ): Uint8Array {
   const dv = new DataView(new ArrayBuffer(PRIM_SIZE));
   dv.setUint8(0, kind);
-  dv.setUint8(1, fill);
+  dv.setUint8(1, 0);
   dv.setUint8(2, font);
   dv.setUint8(3, align);
   dv.setInt16(4, x, true);
@@ -510,7 +469,7 @@ function primRecord(
   dv.setUint16(12, r, true);
   dv.setInt16(14, (((Math.round(rot * 10) % 3600) + 3600) % 3600), true);
   dv.setUint32(16, textOff >>> 0, true);
-  dv.setUint32(20, literal >>> 0, true);
+  dv.setUint32(20, colour >>> 0, true);
   return new Uint8Array(dv.buffer);
 }
 
@@ -604,8 +563,6 @@ export function buildLabelSheet(
     dv.setUint8(at + 13, t.font[1]);
     dv.setUint8(at + 14, t.font[2]);
     dv.setUint8(at + 15, t.canvases.length);
-    t.inks.forEach((c, i) => dv.setUint32(at + 16 + i * 4, c >>> 0, true));
-    dv.setUint32(at + 60, 0, true);
     at += TEMPLATE_SIZE;
   }
   for (const t of templates) {
@@ -672,13 +629,12 @@ export function jcardsJson(designs: readonly PackDesign[]): Uint8Array {
     return ai < bi ? -1 : ai > bi ? 1 : 0;
   });
   const body = {
-    v: 1,
+    v: 2,
     designs: ordered.map((design) => {
       const d = design as Record<string, unknown>;
       return {
         id: d.id,
         name: d.name,
-        inks: d.inks,
         jcard: d.jcard,
       };
     }),

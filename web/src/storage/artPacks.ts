@@ -26,7 +26,7 @@ export interface CachedArtPack {
   packId: string;
   name: string;
   author: string;
-  /** The `{ v: 1, designs }` document, as `readArtPack` parsed it. */
+  /** The `{ v: 2, designs }` document, as `readArtPack` parsed it. */
   jcards: unknown;
 }
 

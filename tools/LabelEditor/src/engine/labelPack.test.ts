@@ -79,11 +79,11 @@ describe("the browser packer", () => {
 
     const jcards = JSON.parse(new TextDecoder().decode(pack.jcards)) as {
       v: number;
-      designs: Array<{ id: string; name: string; inks: unknown; jcard: unknown }>;
+      designs: Array<{ id: string; name: string; inks?: unknown; jcard: unknown }>;
     };
-    expect(jcards.v).toBe(1);
+    expect(jcards.v).toBe(2);
     expect(jcards.designs.map((d) => d.id)).toEqual(pack.designIds);
-    expect(jcards.designs[0].inks).toEqual((designs()[0] as { inks: unknown }).inks);
+    expect(jcards.designs[0].inks).toBeUndefined();
     expect(jcards.designs[0].jcard).toEqual((designs()[0] as { jcard: unknown }).jcard);
   });
 

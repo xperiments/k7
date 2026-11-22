@@ -1,27 +1,16 @@
 {
   "format": "k7art",
-  "v": 1,
+  "v": 2,
   "id": "k7.neon",
   "name": "neon",
-  "inks": {
-    "paper": "#142538",
-    "ink": "#adadad",
-    "rule": "#8e7e4a",
-    "band": [
-      "#ea2e44",
-      "#f14a4b",
-      "#f36246",
-      "#f47447",
-      "#3b6e8f",
-      "#7a3b52",
-      "#b9ac8e",
-      "#3b3b3b"
-    ]
-  },
   "label": {
     "space": {
       "w": 748,
       "h": 359
+    },
+    "mask": {
+      "color": "#142538",
+      "r": 10
     },
     "aperture": {
       "x": 95,
@@ -61,22 +50,12 @@
     },
     "prims": [
       {
-        "t": "rect",
-        "x": 0,
-        "y": 0,
-        "w": 748,
-        "h": 359,
-        "r": 10,
-        "fill": "paper",
-        "still": true
-      },
-      {
         "t": "text",
         "x": 36,
         "y": 8,
         "w": 105,
         "font": "numeral",
-        "color": "band.4",
+        "color": "#3b6e8f",
         "align": "left",
         "text": "808"
       },
@@ -86,7 +65,7 @@
         "y": 4,
         "w": 38,
         "font": "numeral",
-        "color": "band.4",
+        "color": "#3b6e8f",
         "align": "left",
         "text": "B"
       },
@@ -96,7 +75,7 @@
         "y": 120,
         "w": 748,
         "h": 10,
-        "fill": "band.0",
+        "fill": "#ea2e44",
         "still": true
       },
       {
@@ -105,7 +84,7 @@
         "y": 150,
         "w": 748,
         "h": 10,
-        "fill": "band.0",
+        "fill": "#ea2e44",
         "still": true
       },
       {
@@ -114,7 +93,7 @@
         "y": 180,
         "w": 748,
         "h": 10,
-        "fill": "band.1",
+        "fill": "#f14a4b",
         "still": true
       },
       {
@@ -123,7 +102,7 @@
         "y": 210,
         "w": 748,
         "h": 10,
-        "fill": "band.2",
+        "fill": "#f36246",
         "still": true
       },
       {
@@ -132,7 +111,7 @@
         "y": 240,
         "w": 748,
         "h": 10,
-        "fill": "band.2",
+        "fill": "#f36246",
         "still": true
       },
       {
@@ -141,7 +120,7 @@
         "y": 270,
         "w": 748,
         "h": 10,
-        "fill": "band.3",
+        "fill": "#f47447",
         "still": true
       },
       {
@@ -150,7 +129,7 @@
         "y": 300,
         "w": 748,
         "h": 10,
-        "fill": "band.3",
+        "fill": "#f47447",
         "still": true
       },
       {
@@ -159,7 +138,7 @@
         "y": 330,
         "w": 748,
         "h": 10,
-        "fill": "band.4",
+        "fill": "#3b6e8f",
         "still": true
       },
       {
@@ -169,7 +148,7 @@
         "y": 11,
         "w": 480,
         "font": "title",
-        "color": "ink",
+        "color": "#adadad",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -180,7 +159,7 @@
         "y": 48,
         "w": 480,
         "font": "title",
-        "color": "band.4",
+        "color": "#3b6e8f",
         "align": "left",
         "preview": "Albert Pla"
       }
@@ -212,7 +191,7 @@
         "h": 1280
       }
     },
-    "paper": "#142538",
+    "background": "#142538",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -229,21 +208,13 @@
     },
     "prims": [
       {
-        "t": "rect",
-        "x": 0,
-        "y": 0,
-        "w": 1300,
-        "h": 1280,
-        "fill": "paper"
-      },
-      {
         "t": "text",
         "slot": "title",
         "x": 540,
         "y": 900,
         "w": 700,
         "font": "numeral",
-        "color": "ink",
+        "color": "#adadad",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -254,7 +225,7 @@
         "y": 1060,
         "w": 700,
         "font": "title",
-        "color": "ink",
+        "color": "#adadad",
         "align": "left",
         "preview": "The Analog Sons"
       },
@@ -265,9 +236,9 @@
         "y": 1120,
         "w": 700,
         "font": "caption",
-        "color": "ink",
+        "color": "#adadad",
         "align": "left",
-        "preview": "Side A \u00b7 Side B"
+        "preview": "Side A · Side B"
       }
     ]
   }

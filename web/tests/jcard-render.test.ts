@@ -18,34 +18,22 @@ const FONTS = {
   numeral: { ff: 'Barlow Condensed 700', size: 136 },
   caption: { ff: 'IBM Plex Mono 500', size: 31 },
 };
-const INKS = {
-  paper: '#f5f1e6',
-  ink: '#242424',
-  rule: '#8e7e4a',
-  band: [
-    '#c68b2e',
-    '#a24e2c',
-    '#8a5d34',
-    '#6b7a2f',
-    '#3b6e8f',
-    '#7a3b52',
-    '#b9ac8e',
-    '#2f4b3a',
-  ],
-};
+const BACKGROUND = '#f5f1e6';
+const INK = '#242424';
+const RULE = '#8e7e4a';
 const FIELDS = { title: 'Neon Skyline', artist: 'The Analog Sons', meta: 'Side A · Side B' };
 
 /** A readable design around a set of prims, through the same reader the factory uses. */
 function design(prims: unknown[], fonts = FONTS): JcardDesign {
   const read = readJcardDesign({
     format: 'k7art',
-    v: 1,
+    v: 2,
     id: 'k7.test',
     name: 'Test',
-    inks: INKS,
     jcard: {
       space: { w: 1300, h: 1280, unit: 320 },
       parts: PARTS,
+      background: BACKGROUND,
       fonts,
       prims,
     },
@@ -59,28 +47,44 @@ function number(value: unknown): number {
 }
 
 describe('the J-card renderer', () => {
-  it('paints every shape and text with the container ink its role names', () => {
+  it('paints every shape and text with its own literal colour', () => {
     const drawn = design([
-      { t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: 'paper' },
-      { t: 'rect', x: 0, y: 100, w: 1300, h: 4, fill: 'rule' },
-      { t: 'rect', x: 0, y: 120, w: 1300, h: 10, fill: 'band.4' },
-      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left' },
-      { t: 'text', text: 'A · B', x: 540, y: 1120, w: 700, font: 'caption', color: 'band.2', align: 'center' },
+      { t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: BACKGROUND },
+      { t: 'rect', x: 0, y: 100, w: 1300, h: 4, fill: RULE },
+      { t: 'rect', x: 0, y: 120, w: 1300, h: 10, fill: '#3b6e8f' },
+      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: INK, align: 'left' },
+      { t: 'text', text: 'A · B', x: 540, y: 1120, w: 700, font: 'caption', color: '#8a5d34', align: 'center' },
     ]);
     const { nodes } = jcardFrame(drawn, FIELDS, 'cover');
 
     expect(nodes).toHaveLength(5);
-    expect(nodes[0]).toMatchObject({ kind: 'rect', style: { background: INKS.paper } });
-    expect(nodes[1]).toMatchObject({ kind: 'rect', style: { background: INKS.rule } });
-    expect(nodes[2]).toMatchObject({ kind: 'rect', style: { background: INKS.band[4] } });
-    expect(nodes[3]).toMatchObject({ kind: 'text', content: 'Neon Skyline', style: { color: INKS.ink } });
-    expect(nodes[4]).toMatchObject({ kind: 'text', content: 'A · B', style: { color: INKS.band[2] } });
+    expect(nodes[0]).toMatchObject({ kind: 'rect', style: { background: BACKGROUND } });
+    expect(nodes[1]).toMatchObject({ kind: 'rect', style: { background: RULE } });
+    expect(nodes[2]).toMatchObject({ kind: 'rect', style: { background: '#3b6e8f' } });
+    expect(nodes[3]).toMatchObject({ kind: 'text', content: 'Neon Skyline', style: { color: INK } });
+    expect(nodes[4]).toMatchObject({ kind: 'text', content: 'A · B', style: { color: '#8a5d34' } });
+  });
+
+  it('paints a colour it cannot read transparent rather than resolving a role', () => {
+    const drawn = design([{ t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '#ff0000' }]);
+    const broken: JcardDesign = {
+      ...drawn,
+      jcard: {
+        ...drawn.jcard,
+        background: 'paper',
+        prims: [{ t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: 'ink' }],
+      },
+    };
+    const { nodes, sheet } = jcardFrame(broken, FIELDS, 'cover');
+
+    expect(nodes[0]).toMatchObject({ kind: 'rect', style: { background: 'transparent' } });
+    expect(sheet.background).toBe('transparent');
   });
 
   it('sizes a text by its role size as a share of the sheet width', () => {
     const drawn = design([
-      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left' },
-      { t: 'text', slot: 'artist', x: 540, y: 1060, w: 700, font: 'title', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: INK, align: 'left' },
+      { t: 'text', slot: 'artist', x: 540, y: 1060, w: 700, font: 'title', color: INK, align: 'left' },
     ]);
 
     /* The cover part is 820 units wide, so the numeral's 136 is 136/820 of that surface. */
@@ -96,20 +100,21 @@ describe('the J-card renderer', () => {
     expect(number(spine.nodes[0]?.style.fontSize)).toBeCloseTo((136 / 160) * 100);
   });
 
-  it('lays the sheet in the design paper, with or without a paper rect', () => {
-    /* The sheet is paper: a design that never paints a `paper` rect still has one, and the
-       case's orange face is the chrome's, not the J-card's. */
+  it('lays the sheet in the design background, with or without a background rect', () => {
+    /* The sheet is painted by its own `background`: a design that never lays a full-sheet
+       rect still papers the case, and the case's orange face is the chrome's, not the
+       J-card's. */
     const bare = design([
-      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: INK, align: 'left' },
     ]);
     const { sheet } = jcardFrame(bare, FIELDS, 'cover');
-    expect(sheet.background).toBe(INKS.paper);
+    expect(sheet.background).toBe(BACKGROUND);
   });
 
   it('rotates a prim about its own box, which for a text is its lines', () => {
     const drawn = design([
-      { t: 'rect', x: 320, y: 40, w: 160, h: 1200, fill: 'band.1', rot: 90 },
-      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: 'ink', align: 'left', rot: -12 },
+      { t: 'rect', x: 320, y: 40, w: 160, h: 1200, fill: '#a24e2c', rot: 90 },
+      { t: 'text', slot: 'title', x: 540, y: 900, w: 700, font: 'numeral', color: INK, align: 'left', rot: -12 },
     ]);
     const { nodes } = jcardFrame(drawn, FIELDS, 'spine');
 
@@ -125,7 +130,7 @@ describe('the J-card renderer', () => {
   it('wraps a text to its width and ellipsises the lines that run off the sheet', () => {
     const long = 'The Analog Sons and the whole of the harbour authority';
     const drawn = design([
-      { t: 'text', slot: 'artist', x: 540, y: 1060, w: 700, font: 'title', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'artist', x: 540, y: 1060, w: 700, font: 'title', color: INK, align: 'left' },
     ]);
     const { nodes } = jcardFrame(drawn, { ...FIELDS, artist: long }, 'cover');
     const node = nodes[0];
@@ -152,7 +157,7 @@ describe('the J-card renderer', () => {
         y: 1060,
         w: 700,
         font: 'title',
-        color: 'ink',
+        color: INK,
         align: 'right',
       },
     ]);
@@ -163,8 +168,8 @@ describe('the J-card renderer', () => {
 
   it('clips the cover at x=480 and x=1300', () => {
     const drawn = design([
-      { t: 'rect', x: 480, y: 0, w: 10, h: 10, fill: 'ink' },
-      { t: 'rect', x: 290, y: 0, w: 10, h: 10, fill: 'ink' },
+      { t: 'rect', x: 480, y: 0, w: 10, h: 10, fill: INK },
+      { t: 'rect', x: 290, y: 0, w: 10, h: 10, fill: INK },
     ]);
     const { sheet, nodes } = jcardFrame(drawn, FIELDS, 'cover', 'fill');
 
@@ -182,7 +187,7 @@ describe('the J-card renderer', () => {
   });
 
   it('clips the spine at x=320 and x=480', () => {
-    const drawn = design([{ t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: 'paper' }]);
+    const drawn = design([{ t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: BACKGROUND }]);
     const { sheet } = jcardFrame(drawn, FIELDS, 'spine', 'fill');
 
     expect(number(sheet.left)).toBeCloseTo(-200);
@@ -194,7 +199,7 @@ describe('the J-card renderer', () => {
   });
 
   it('shows exactly the safe square when a square surface covers the cover part', () => {
-    const drawn = design([{ t: 'rect', x: 480, y: 230, w: 820, h: 820, fill: 'ink' }]);
+    const drawn = design([{ t: 'rect', x: 480, y: 230, w: 820, h: 820, fill: INK }]);
     const { sheet } = jcardFrame(drawn, FIELDS, 'cover', 'cover');
 
     /* The sheet is uniform, so a square surface is 100cqi tall; its top centring is the
@@ -213,13 +218,13 @@ describe('the J-card reader', () => {
   it('refuses a sheet that is not the case, its parts, or its faces', () => {
     const raw = {
       format: 'k7art',
-      v: 1,
+      v: 2,
       id: 'k7.test',
       name: 'Test',
-      inks: INKS,
       jcard: {
         space: { w: 1200, h: 1280, unit: 320 },
         parts: PARTS,
+        background: BACKGROUND,
         fonts: FONTS,
         prims: [],
       },
@@ -258,22 +263,55 @@ describe('the J-card reader', () => {
     expect(readJcardDesign({ ...raw, format: 'label-template' })).toBeNull();
   });
 
-  it('drops a prim whose ink, font, field or colour it cannot draw', () => {
+  it('reads v2 and the factory import, and refuses v1 by version', () => {
+    const jcard = {
+      space: { w: 1300, h: 1280, unit: 320 },
+      parts: PARTS,
+      background: BACKGROUND,
+      fonts: FONTS,
+      prims: [],
+    };
+    const file = { format: 'k7art', v: 2, id: 'k7.test', name: 'Test', jcard };
+
+    expect(readJcardDesign(file)?.id).toBe('k7.test');
+    /* The factory's named imports carry id, name and jcard only (factory.ts). */
+    expect(readJcardDesign({ id: 'k7.test', name: 'Test', jcard })).not.toBeNull();
+    expect(readJcardDesign({ ...file, v: 1 })).toBeNull();
+  });
+
+  it('refuses a sheet with no background, or one that is not a colour', () => {
+    const jcard = {
+      space: { w: 1300, h: 1280, unit: 320 },
+      parts: PARTS,
+      fonts: FONTS,
+      prims: [],
+    };
+    const design = { format: 'k7art', v: 2, id: 'k7.test', name: 'Test', jcard };
+
+    expect(readJcardDesign(design)).toBeNull();
+    expect(readJcardDesign({ ...design, jcard: { ...jcard, background: 'paper' } })).toBeNull();
+    expect(
+      readJcardDesign({ ...design, jcard: { ...jcard, background: '#f5f1e6' } }),
+    ).not.toBeNull();
+  });
+
+  it('drops a prim whose colour, font, field or text it cannot draw', () => {
     const drawn = design([
-      { t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: 'paper' },
+      { t: 'rect', x: 0, y: 0, w: 10, h: 10, fill: '#ff0000' },
       { t: 'rect', x: 0, y: 10, w: 10, h: 10, fill: 'band.9' },
-      { t: 'rect', x: 0, y: 20, w: 10, h: 10, fill: '#ff0000' },
+      { t: 'rect', x: 0, y: 15, w: 10, h: 10 },
       /* The K7's own fields are the J-card's too: a tempo on a case is drawn. */
-      { t: 'text', slot: 'bpm', x: 0, y: 30, w: 10, font: 'title', color: 'ink', align: 'left' },
-      { t: 'text', slot: 'nope', x: 0, y: 35, w: 10, font: 'title', color: 'ink', align: 'left' },
-      { t: 'text', slot: 'title', x: 0, y: 40, w: 10, font: 'nope', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'bpm', x: 0, y: 30, w: 10, font: 'title', color: INK, align: 'left' },
+      { t: 'text', slot: 'nope', x: 0, y: 35, w: 10, font: 'title', color: INK, align: 'left' },
+      { t: 'text', slot: 'title', x: 0, y: 40, w: 10, font: 'nope', color: INK, align: 'left' },
       { t: 'text', slot: 'title', x: 0, y: 50, w: 10, font: 'title', color: 'paper', align: 'left' },
-      { t: 'text', text: '', x: 0, y: 60, w: 10, font: 'title', color: 'ink', align: 'left' },
+      { t: 'text', slot: 'title', x: 0, y: 55, w: 10, font: 'title', align: 'left' },
+      { t: 'text', text: '', x: 0, y: 60, w: 10, font: 'title', color: INK, align: 'left' },
     ]);
 
     expect(drawn.jcard.prims).toHaveLength(2);
-    expect(drawn.jcard.prims[0]).toMatchObject({ t: 'rect', fill: 'paper' });
-    expect(drawn.jcard.prims[1]).toMatchObject({ t: 'text', slot: 'bpm' });
+    expect(drawn.jcard.prims[0]).toMatchObject({ t: 'rect', fill: '#ff0000' });
+    expect(drawn.jcard.prims[1]).toMatchObject({ t: 'text', slot: 'bpm', color: INK });
   });
 
   it('refuses a section over the App prim cap', () => {
@@ -283,17 +321,17 @@ describe('the J-card reader', () => {
       y: at,
       w: 10,
       h: 1,
-      fill: 'paper',
+      fill: '#ff0000',
     }));
     const raw = {
       format: 'k7art',
-      v: 1,
+      v: 2,
       id: 'k7.test',
       name: 'Test',
-      inks: INKS,
       jcard: {
         space: { w: 1300, h: 1280, unit: 320 },
         parts: PARTS,
+        background: BACKGROUND,
         fonts: FONTS,
         prims: many,
       },
@@ -305,21 +343,21 @@ describe('the J-card reader', () => {
     const one = {
       id: 'k7.one',
       name: 'One',
-      inks: INKS,
       jcard: {
         space: { w: 1300, h: 1280, unit: 320 },
         parts: PARTS,
+        background: BACKGROUND,
         fonts: FONTS,
-        prims: [{ t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: 'paper' }],
+        prims: [{ t: 'rect', x: 0, y: 0, w: 1300, h: 1280, fill: '#ff0000' }],
       },
     };
     const bad = { ...one, id: 'nope' };
 
-    const designs = readJcardPack({ v: 1, designs: [one, bad] });
+    const designs = readJcardPack({ v: 2, designs: [one, bad] });
     expect(designs).toHaveLength(1);
     expect(designs?.[0]?.id).toBe('k7.one');
 
-    expect(readJcardPack({ v: 2, designs: [one] })).toBeNull();
+    expect(readJcardPack({ v: 1, designs: [one] })).toBeNull();
     expect(readJcardPack({ designs: 'no' })).toBeNull();
     expect(readJcardPack([one])).toHaveLength(1);
   });

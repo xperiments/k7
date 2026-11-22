@@ -17,7 +17,6 @@ export {
   JCARD_HEIGHT,
   JCARD_PARTS,
   JCARD_PRIM_MAX,
-  JCARD_ROLES,
   JCARD_SAFE,
   JCARD_SIZE_MAX,
   JCARD_SIZE_MIN,
@@ -32,15 +31,13 @@ export {
   type JcardField,
   type JcardFont,
   type JcardFontRole,
-  type JcardInks,
   type JcardPart,
   type JcardPrim,
   type JcardRect,
-  type JcardRole,
   type JcardSection,
   type JcardText,
 } from './model';
-export { jcardFrame, roleColor, type JcardFit, type JcardFrame, type JcardNode } from './render';
+export { jcardFrame, type JcardFit, type JcardFrame, type JcardNode } from './render';
 export { Jcard } from './face';
 export { FACTORY_JCARDS, factoryDesigns } from './factory';
 export {

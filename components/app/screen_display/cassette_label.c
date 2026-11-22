@@ -64,24 +64,6 @@ static uint16_t       s_text_count;
 static bool           s_full;
 static uint8_t        s_canvas_count;
 
-static lv_color_t fill_colour(const label_inks_t *inks, uint8_t fill, uint32_t literal)
-{
-    switch (fill) {
-    case LABEL_FILL_PAPER: return lv_color_hex(inks->paper);
-    case LABEL_FILL_INK: return lv_color_hex(inks->ink);
-    case LABEL_FILL_RULE: return lv_color_hex(inks->rule);
-    case LABEL_FILL_BAND0: return lv_color_hex(inks->band[0]);
-    case LABEL_FILL_BAND1: return lv_color_hex(inks->band[1]);
-    case LABEL_FILL_BAND2: return lv_color_hex(inks->band[2]);
-    case LABEL_FILL_BAND3: return lv_color_hex(inks->band[3]);
-    case LABEL_FILL_BAND4: return lv_color_hex(inks->band[4]);
-    case LABEL_FILL_BAND5: return lv_color_hex(inks->band[5]);
-    case LABEL_FILL_BAND6: return lv_color_hex(inks->band[6]);
-    case LABEL_FILL_BAND7: return lv_color_hex(inks->band[7]);
-    default: return lv_color_hex(literal);
-    }
-}
-
 /* A rect is one box: no border, no padding, no scroll, and the design's radius. A rotation
  * turns it about its own centre, which is what the editor's preview shows. */
 static lv_obj_t *rect_create(lv_obj_t *parent, const label_prim_t *p, lv_color_t colour)
@@ -152,7 +134,6 @@ static void build(uint16_t t)
 {
     destroy_nodes();
 
-    const label_inks_t inks = label_inks(s_sheet, t);
     const uint16_t n = label_prim_count(s_sheet, t);
     s_canvas_count = label_canvas_count(s_sheet, t);
 
@@ -160,7 +141,7 @@ static void build(uint16_t t)
         label_prim_t p;
         if (!label_prim_at(s_sheet, t, i, &p)) continue;
 
-        const lv_color_t colour = fill_colour(&inks, p.fill, p.literal);
+        const lv_color_t colour = lv_color_hex(p.colour);
         const uint8_t font_index = label_font(s_sheet, t, p.font);
 
         if (p.kind == LABEL_RECT) {

@@ -1,15 +1,16 @@
 import {
   COORDS,
-  DEFAULT_BANDS,
+  DEFAULT_INK,
   FROLES,
+  HEX,
   LIMITS,
+  PAL,
   PRINT_H,
   PRINT_W,
-  ROLES,
   SHEET_FONTS,
   SLOT_CEILING,
-  TEXT_ROLES,
   WIN,
+  isColour,
   onSheet,
   slotOf,
 } from "./vocab";
@@ -38,7 +39,6 @@ export const DEFAULT_CANVAS = "#909090";
 /** The paper a design without a LayerMask still has, because the J-card is paper either way. */
 export const DEFAULT_PAPER = "#c7a867";
 
-const HEX = /^#[0-9a-f]{6}$/i;
 const K7_ID = /^k7\.[a-z0-9][a-z0-9-]*$/;
 const LABEL_ID = /^label\.([a-z0-9][a-z0-9-]*)$/;
 
@@ -61,17 +61,11 @@ export function canvasOf(data: { bg?: string; bgs?: string[]; bgi?: number }): C
   return { backgrounds, active };
 }
 
-/** The design a document starts from: its id, name, inks, font roles, slots and sims. */
+/** The design a document starts from: its id, name, font roles, slots and sims. */
 export function defaultTpl(): Tpl {
   return {
     id: "k7.untitled",
     name: "Untitled",
-    inks: {
-      paper: DEFAULT_PAPER,
-      ink: "#151515",
-      band: DEFAULT_BANDS.slice(0, VOCAB.bands),
-      rule: "#8e7e4a",
-    },
     fonts: JSON.parse(JSON.stringify(VOCAB.defaults.fonts)) as Tpl["fonts"],
     slots: {},
     sim: {},
@@ -82,18 +76,50 @@ export function alignOf(o: Obj): "left" | "center" | "right" {
   return o.align === "right" || o.align === "center" ? o.align : "left";
 }
 
-export const roleColorOf = (r: string, mask: Mask | null, tpl: Tpl) =>
-  r === "paper"
-    ? mask
-      ? mask.color
-      : tpl.inks.paper || "#ffffff"
-    : r === "ink"
-      ? tpl.inks.ink
-      : r === "rule"
-        ? tpl.inks.rule
-        : /^band\.[0-7]$/.test(r || "")
-          ? tpl.inks.band[+r.slice(5)]
-          : null;
+/** A v1 K7Art's role colours, read only to migrate a v1 file or a stored v1 document. */
+export interface Inks {
+  paper: string;
+  ink: string;
+  rule: string;
+  band: string[];
+}
+
+/** A v1 role's colour, in a v1 file's own inks. `paper` may be the mask's colour. */
+export function roleColour(
+  role: string | undefined,
+  inks: Inks | null,
+  paper?: string,
+): string | null {
+  if (!inks) return null;
+  if (role === "paper") return isColour(paper) ? paper : inks.paper;
+  if (role === "ink") return inks.ink;
+  if (role === "rule") return inks.rule;
+  const m = /^band\.([0-7])$/.exec(role ?? "");
+  return m ? (inks.band[Number(m[1])] ?? null) : null;
+}
+
+/** A v1 file's or document's `inks`, or null when it never had one. */
+export function readInks(raw: unknown, where: string): Inks | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) throw new Error(`${where}: inks is not an object`);
+  const inks = raw as Record<string, unknown>;
+  const ink = inks.ink;
+  const rule = inks.rule;
+  const paper = inks.paper;
+  const band = inks.band;
+  if (!isColour(ink) || !isColour(rule))
+    throw new Error(`${where}: v1 inks need ink and rule colours`);
+  if (paper !== undefined && paper !== null && !isColour(paper))
+    throw new Error(`${where}: v1 inks.paper is not #RRGGBB`);
+  if (!Array.isArray(band) || !band.every(isColour))
+    throw new Error(`${where}: v1 inks.band is not a list of #RRGGBB colours`);
+  return {
+    paper: isColour(paper) ? paper : DEFAULT_PAPER,
+    ink,
+    rule,
+    band: band as string[],
+  };
+}
 
 /**
  * A text's preview in the editor: the fields' test values, one per field. A layer has no
@@ -122,97 +148,48 @@ export function migrateFonts(tpl: Tpl): void {
 }
 
 /**
- * A document saved before the palette had eight bands carries four: pad the rest from the
- * current default so the template panel has a colour for every control.
+ * Every layer carries its own colour. A layer saved before the colours were literal had a
+ * role instead; that is resolved by `migrateDocData` through the document's own inks, and
+ * this is what settles anything left (and the scale a text carried in the retired format).
  */
-export function migrateBands(tpl: Tpl): void {
-  if (!tpl || !tpl.inks) return;
-  const d = defaultTpl().inks.band;
-  const b = Array.isArray(tpl.inks.band) ? tpl.inks.band.slice(0, 8) : [];
-  while (b.length < 8) b.push(d[b.length]);
-  tpl.inks.band = b;
+export function normaliseColours(objs: Obj[]): void {
+  objs.forEach((o) => {
+    if (o.ap) return;
+    if (o.type === "text" && o.s && o.s !== 1) {
+      o.w = Math.round(o.w * o.s);
+      delete o.s;
+    }
+    if (!isColour(o.color))
+      o.color = o.type === "text" ? DEFAULT_INK : PAL[0];
+  });
 }
 
 /**
- * The paper is one colour on both media. The label's LayerMask is the label's paper, so it is
- * the container's; a document made before the J-card existed carries no paper at all, and gets
- * the default one so the J-card has a sheet and the K7Art always names a colour.
- */
-export function migratePaper(tpl: Tpl, mask: Mask | null): void {
-  if (!tpl.inks) tpl.inks = defaultTpl().inks;
-  if (mask && HEX.test(mask.color || "")) tpl.inks.paper = mask.color;
-  else if (!HEX.test(tpl.inks.paper || "")) tpl.inks.paper = DEFAULT_PAPER;
-}
-
-/**
- * A document stored before the container existed: it gets the K7Art's id, its paper and its
- * J-card (the starter, from its own label's paper and faces), so every loaded document is a
- * K7Art without a second save. Idempotent: a document already migrated is unchanged.
+ * A stored document becomes a v2 one: its v1 inks resolve each layer's and each J-card
+ * layer's role to a colour, the J-card's paper becomes its background, and the inks go. It
+ * is idempotent: a v2 document has no roles and no inks, and is unchanged.
  */
 export function migrateDocData(data: DocData): DocData {
   if (!data.tpl) data.tpl = defaultTpl();
-  const tpl = data.tpl;
+  const tpl = data.tpl as Tpl & { inks?: Inks };
+  const inks = readInks(tpl.inks, "the document");
   migrateFonts(tpl);
-  migrateBands(tpl);
-  migratePaper(tpl, data.mask ?? null);
   tpl.id = migrateId(tpl.id);
-  data.jcard = migrateJCard(data.jcard, tpl);
+  const mask = data.mask ?? null;
+  if (inks) {
+    (data.objs ?? []).forEach((o) => {
+      if (o.ap) return;
+      const legacy = o as Obj & { role?: string };
+      const c = roleColour(legacy.role, inks, mask?.color);
+      if (c) o.color = c;
+      delete legacy.role;
+    });
+  }
+  normaliseColours(data.objs ?? []);
+  if (mask && !isColour(mask.color)) mask.color = inks?.paper ?? DEFAULT_PAPER;
+  data.jcard = migrateJCard(data.jcard, tpl, inks, mask);
+  delete tpl.inks;
   return data;
-}
-
-/** The role of a colour, if it is exactly one of the template's role colours. */
-export function roleOfColour(
-  c: string | undefined,
-  mask: Mask | null,
-  tpl: Tpl,
-): string | null {
-  c = (c || "").toLowerCase();
-  if (!c) return null;
-  if (mask && mask.color.toLowerCase() === c) return "paper";
-  if (tpl.inks.ink.toLowerCase() === c) return "ink";
-  if (tpl.inks.rule.toLowerCase() === c) return "rule";
-  const i = tpl.inks.band.findIndex((b) => b.toLowerCase() === c);
-  return i >= 0 ? `band.${i}` : null;
-}
-
-/** Layers whose own colour is already a role's colour take that role. */
-export function nearestRole(hex: string, mask: Mask | null, tpl: Tpl): string {
-  const rgb = (h: string) => {
-    const m = /^#?([0-9a-f]{6})$/i.exec(h || "");
-    if (!m) return null;
-    const n = parseInt(m[1], 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255] as [number, number, number];
-  };
-  const c = rgb(hex);
-  if (!c) return "band.0";
-  let best = "band.0";
-  let bd = Infinity;
-  ROLES.forEach((r) => {
-    const rc = rgb(roleColorOf(r, mask, tpl) ?? "");
-    if (!rc) return;
-    const d = (rc[0] - c[0]) ** 2 + (rc[1] - c[1]) ** 2 + (rc[2] - c[2]) ** 2;
-    if (d < bd) {
-      bd = d;
-      best = r;
-    }
-  });
-  return best;
-}
-
-/** Text roles and shape roles differ: a text prints in the ink or a band, never paper. */
-export function normalizeRoles(objs: Obj[], mask: Mask | null, tpl: Tpl): void {
-  objs.forEach((o) => {
-    if (o.ap) return;
-    if (o.type === "text") {
-      if (!TEXT_ROLES.includes(o.role ?? "")) o.role = "ink";
-      if (o.s && o.s !== 1) {
-        o.w = Math.round(o.w * o.s);
-        delete o.s;
-      }
-      return;
-    }
-    if (!ROLES.includes(o.role ?? "")) o.role = nearestRole(o.color ?? "", mask, tpl);
-  });
 }
 
 /** Slots follow the text layers: a named text declares its slot, an unused slot is dropped. */
@@ -240,28 +217,28 @@ export function aperturePath(ap: Obj): string {
   return `M0 0H${PRINT_W}V${PRINT_H}H0Z M${x + r} ${y}H${x + w - r}A${r} ${r} 0 0 1 ${x + w} ${y + r}V${y + h - r}A${r} ${r} 0 0 1 ${x + w - r} ${y + h}H${x + r}A${r} ${r} 0 0 1 ${x} ${y + h - r}V${y + r}A${r} ${r} 0 0 1 ${x + r} ${y}Z`;
 }
 
-/** The label section: everything the sheet reads, minus the container's identity and inks. */
+/** The label section: everything the sheet reads, minus the container's identity. */
 export interface LabelSection {
   space: { w: number; h: number };
+  /** The LayerMask: the print's paper, a colour and a corner radius. */
+  mask?: { color: string; r: number };
   aperture?: { x: number; y: number; w: number; h: number; r: number };
   canvas?: CanvasDoc;
   fonts: Record<FontRole, { ff: string; px: number }>;
   slots: Record<string, { max: number }>;
-  notes?: string[];
   prims: Array<Record<string, unknown>>;
 }
 
 /**
- * The file: one K7Art v1 (docs/specs/k7art.md §1). One design, one id, two sections - the
+ * The file: one K7Art v2 (docs/specs/k7art.md §1). One design, one id, two sections - the
  * label the panel prints and the J-card the webapp draws. The key order is the file's:
- * `format`, `v`, `id`, `name`, `inks`, `label`, `jcard`; the sections follow their spec.
+ * `format`, `v`, `id`, `name`, `label`, `jcard`; the sections follow their spec.
  */
 export interface K7ArtDoc {
   format: "k7art";
-  v: 1;
+  v: 2;
   id: string;
   name: string;
-  inks: { paper: string; ink: string; rule: string; band: string[] };
   label: LabelSection;
   jcard: JCardFile;
 }
@@ -298,7 +275,6 @@ export function buildTemplate(
   const W0 = PRINT_W;
   const H0 = PRINT_H;
   const ap = objs.find((o) => o.ap && o.type === "rect") || null;
-  const paperOn = !!mask;
   const prims: Array<Record<string, unknown>> = [];
   const seen: Record<string, 1> = {};
 
@@ -313,13 +289,12 @@ export function buildTemplate(
 
   if (!K7_ID.test(tpl.id))
     errs.push(`id "${tpl.id}" must look like k7.my-name`);
-  if (ap && !paperOn) errs.push("aperture: needs a LayerMask (the paper it cuts)");
-
-  // The container's paper is one colour on both media: the label's LayerMask when it has one,
-  // and the J-card's sheet either way. A K7Art always names it.
-  const paper = mask ? mask.color : tpl.inks.paper || DEFAULT_PAPER;
-  if (!HEX.test(paper))
-    errs.push(`inks.paper "${paper}" is not #RRGGBB`);
+  if (ap && !mask) errs.push("aperture: needs a LayerMask (the paper it cuts)");
+  if (mask) {
+    if (!isColour(mask.color)) errs.push(`mask.color "${mask.color}" is not #RRGGBB`);
+    if (!Number.isInteger(mask.radius) || mask.radius < 0)
+      errs.push(`mask.r ${mask.radius} is not a corner radius`);
+  }
 
   // The aperture is the Card's window, not the design's: the mask already cuts it, so the
   // file either omits it or names exactly that window.
@@ -351,7 +326,7 @@ export function buildTemplate(
       `canvas: ${bgs.length} backgrounds, and a design carries one to ${VOCAB.canvas}`,
     );
   bgs.forEach((c, i) => {
-    if (!HEX.test(c || "")) errs.push(`canvas.backgrounds[${i}] "${c}" is not #RRGGBB`);
+    if (!isColour(c)) errs.push(`canvas.backgrounds[${i}] "${c}" is not #RRGGBB`);
   });
   const canvasActive = canvas?.active ?? 0;
   if (!Number.isInteger(canvasActive) || canvasActive < 0 || canvasActive >= bgs.length)
@@ -359,26 +334,15 @@ export function buildTemplate(
       `canvas.active ${canvasActive} is not an index into ${bgs.length} backgrounds`,
     );
 
-  // A role's face and size are the design's, but only the sheet's pairs exist as compiled fonts.
+  // A type role's face and size are the design's, but only the sheet's pairs exist as compiled
+  // fonts.
   FROLES.forEach((k) => {
     const f = tpl.fonts[k] || ({} as { ff: string; px: number });
     if (!onSheet(f.ff, f.px || 0))
       errs.push(
-        `font role ${k} is "${f.ff || "(none)"}" ${f.px || 0} px, and assets/labels/vocabulary.json carries ${SHEET_FONTS.map(([ff, px]) => `${ff} ${px}`).join(", ")}`,
+        `type role ${k} is "${f.ff || "(none)"}" ${f.px || 0} px, and assets/labels/vocabulary.json carries ${SHEET_FONTS.map(([ff, px]) => `${ff} ${px}`).join(", ")}`,
       );
   });
-
-  if (paperOn)
-    prims.push({
-      t: "rect",
-      x: 0,
-      y: 0,
-      w: W0,
-      h: H0,
-      r: Math.round(mask!.radius || 0),
-      fill: "paper",
-      still: true,
-    });
 
   objs.forEach((o) => {
     if (o.ap || o.hidden) return;
@@ -411,16 +375,15 @@ export function buildTemplate(
       else if (!tpl.slots[o.name]) errs.push(`${tag}: slot "${o.name}" is not declared`);
       else seen[o.name] = 1;
       if (o.fr !== undefined && !FROLES.includes(o.fr))
-        errs.push(`${tag}: font role must be title, numeral or caption`);
-      if (o.s && o.s !== 1) errs.push(`${tag}: scaled text is not in template v1`);
+        errs.push(`${tag}: type role must be title, numeral or caption`);
+      if (o.s && o.s !== 1) errs.push(`${tag}: scaled text is not in the sheet`);
       const pr: Record<string, unknown> = o.static
         ? { t: "text", x: X, y: Y, w: Wd }
         : { t: "text", slot: o.name || "", x: X, y: Y, w: Wd };
       if (o.rot) pr.rot = Math.round(o.rot);
       pr.font = FROLES.includes(o.fr as FontRole) ? o.fr : "caption";
-      if (!TEXT_ROLES.includes(o.role ?? ""))
-        errs.push(`${tag}: text colour must be ink or one of the eight bands`);
-      pr.color = TEXT_ROLES.includes(o.role ?? "") ? o.role : "ink";
+      if (!isColour(o.color)) errs.push(`${tag}: colour "${o.color ?? ""}" is not #RRGGBB`);
+      pr.color = isColour(o.color) ? o.color : DEFAULT_INK;
       pr.align = alignOf(o);
       if (o.static) pr.text = o.text || "";
       else pr.preview = simText(o, tpl);
@@ -430,10 +393,8 @@ export function buildTemplate(
       if (o.type === "circle") pr.r = Math.floor(Math.min(Wd, Ht) / 2);
       else if (o.r) pr.r = Math.round(o.r);
       if (o.rot) pr.rot = Math.round(o.rot);
-      if (o.role) {
-        if (!ROLES.includes(o.role)) errs.push(`${tag}: unknown role ${o.role}`);
-        pr.fill = o.role;
-      } else errs.push(`${tag}: choose a role (paper, band.0-7 or rule)`);
+      if (!isColour(o.color)) errs.push(`${tag}: fill "${o.color ?? ""}" is not #RRGGBB`);
+      pr.fill = isColour(o.color) ? o.color : PAL[0];
       pr.still = true;
       // A rect may bleed past the print: the print crops it. Only a record the sheet cannot
       // hold is refused, and that is the packer's check.
@@ -449,17 +410,19 @@ export function buildTemplate(
     }
   });
 
-  const noteList: string[] = [];
-
   Object.keys(tpl.slots).forEach((k) => {
     if (!seen[k]) errs.push(`slot "${k}" is declared but no dynamic text uses it`);
   });
 
   // The sheet's caps, so a design that is too big says so at Export instead of failing the
-  // firmware build. They are the vocabulary's, not numbers written twice.
-  if (!prims.length) errs.push("no layers: a design needs at least one prim to print");
-  if (prims.length > LIMITS.prims)
-    errs.push(`${prims.length} layers, and the sheet holds ${LIMITS.prims} per design`);
+  // firmware build. They are the vocabulary's, not numbers written twice. The mask is a prim
+  // in the sheet, so it counts.
+  const sheetPrims = prims.length + (mask ? 1 : 0);
+  if (!sheetPrims) errs.push("no layers: a design needs at least one prim to print");
+  if (sheetPrims > LIMITS.prims)
+    errs.push(
+      `${sheetPrims} layers (the mask's rect included), and the sheet holds ${LIMITS.prims} per design`,
+    );
   if (Object.keys(tpl.slots).length > LIMITS.slots)
     errs.push(
       `${Object.keys(tpl.slots).length} fields, and the sheet holds ${LIMITS.slots} per design`,
@@ -470,15 +433,23 @@ export function buildTemplate(
   const jc = buildJCard(jcard, tpl);
   errs.push(...jc.errs);
 
-  // The label section's key order is the section's own: space, aperture, canvas, fonts,
-  // slots, notes, prims. Its fields are the retired template's, minus the identity and the
-  // inks that moved to the container.
+  // The label section's key order is the section's own: space, mask, aperture, canvas, fonts,
+  // slots, prims. The mask is a section field, not one of the prims, because with every
+  // colour literal a full-print rect could not say it was the LayerMask.
   const slots: Record<string, { max: number }> = {};
   Object.keys(tpl.slots).forEach((k) => {
     slots[k] = { max: tpl.slots[k].max };
   });
   const label: LabelSection = {
     space: { w: W0, h: H0 },
+    ...(mask
+      ? {
+          mask: {
+            color: isColour(mask.color) ? mask.color : DEFAULT_PAPER,
+            r: Math.round(mask.radius || 0),
+          },
+        }
+      : {}),
     // The aperture is absent when the design has none: "no key" and "exactly the window" are
     // the only two answers the packer reads.
     ...(AB
@@ -499,23 +470,16 @@ export function buildTemplate(
       caption: { ff: tpl.fonts.caption.ff, px: tpl.fonts.caption.px },
     },
     slots,
-    ...(noteList.length ? { notes: noteList } : {}),
     prims,
   };
 
-  // The container's key order is the file's: format, v, id, name, inks, label, jcard. The
-  // inks are the design's eleven roles, and the label section is byte-stable.
+  // The container's key order is the file's: format, v, id, name, label, jcard. There are no
+  // inks: every prim carries its colour (docs/specs/k7art.md §2).
   const doc: K7ArtDoc = {
     format: "k7art",
-    v: 1,
+    v: 2,
     id: tpl.id,
     name: tpl.name,
-    inks: {
-      paper,
-      ink: tpl.inks.ink,
-      rule: tpl.inks.rule,
-      band: tpl.inks.band.slice(0, 8),
-    },
     label,
     jcard: jc.doc,
   };
@@ -542,60 +506,17 @@ const isObject = (v: unknown): v is Record<string, unknown> =>
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /**
- * The container's palette, read from the file. `paper` is the one colour the container may
- * leave out when the label has no mask; a retired template's null paper takes the fallback.
- * The band list is padded to the sheet's eight, because the editor's controls carry eight.
- */
-function applyInks(
-  tpl: Tpl,
-  inks: unknown,
-  fallbackPaper: string,
-  required: boolean,
-): string {
-  if (!isObject(inks)) {
-    if (required) throw new Error("no inks -- a design without colours is shapes only");
-    tpl.inks.paper = HEX.test(tpl.inks.paper) ? tpl.inks.paper : fallbackPaper || DEFAULT_PAPER;
-    return tpl.inks.paper;
-  }
-  let paper = fallbackPaper || DEFAULT_PAPER;
-  if (inks.paper !== undefined && inks.paper !== null) {
-    if (typeof inks.paper !== "string" || !HEX.test(inks.paper))
-      throw new Error(`inks.paper ${JSON.stringify(inks.paper)} is not #RRGGBB`);
-    paper = inks.paper;
-  }
-  if (typeof inks.ink !== "string" || !HEX.test(inks.ink))
-    throw new Error(`inks.ink ${JSON.stringify(inks.ink)} is not #RRGGBB`);
-  if (typeof inks.rule !== "string" || !HEX.test(inks.rule))
-    throw new Error(`inks.rule ${JSON.stringify(inks.rule)} is not #RRGGBB`);
-  const band = inks.band;
-  if (!Array.isArray(band) || band.length < 4 || band.length > VOCAB.bands)
-    throw new Error(
-      `inks.band has ${Array.isArray(band) ? band.length : "no"} colours, and a design has four to ${VOCAB.bands}`,
-    );
-  band.forEach((c, i) => {
-    if (typeof c !== "string" || !HEX.test(c))
-      throw new Error(`inks.band[${i}] ${JSON.stringify(c)} is not #RRGGBB`);
-  });
-  // The sheet always carries eight slots; a design that declares four leaves the rest 0.
-  const padded = band.slice();
-  while (padded.length < VOCAB.bands) padded.push(defaultTpl().inks.band[padded.length]);
-  tpl.inks.paper = paper;
-  tpl.inks.ink = inks.ink;
-  tpl.inks.rule = inks.rule;
-  tpl.inks.band = padded;
-  return paper;
-}
-
-/**
  * The label section's reader: the inverse of the label half of buildTemplate. It throws
  * what the sheet cannot hold, so a file the packer would refuse does not open.
  */
 function importLabelSection(
   label: Record<string, unknown>,
   tpl: Tpl,
-  paperColour: string,
-  requireFonts: boolean,
+  opts: { inks?: Inks | null; fallbackPaper: string; requireFonts: boolean },
 ): { mask: Mask | null; objs: Obj[]; nid: number; canvas: CanvasDoc } {
+  const inks = opts.inks ?? null;
+  const requireFonts = opts.requireFonts;
+  const fallbackPaper = opts.fallbackPaper || DEFAULT_PAPER;
   const space = label.space;
   if (!isObject(space) || space.w !== PRINT_W || space.h !== PRINT_H)
     throw new Error(
@@ -686,13 +607,29 @@ function importLabelSection(
   const prims = label.prims;
   if (!Array.isArray(prims)) throw new Error("prims is missing -- there is nothing to print");
 
-  const paper = prims.find(
-    (p) => isObject(p) && p.t === "rect" && p.fill === "paper",
-  ) as Record<string, unknown> | undefined;
-  if (aperture !== undefined && !paper) throw new Error("aperture without a paper");
-  const mask: Mask | null = paper
-    ? { color: paperColour, radius: isNum(paper.r) ? paper.r : 0, collapsed: false }
-    : null;
+  let mask: Mask | null = null;
+  if (inks) {
+    // v1: the full-print paper rect is the LayerMask (docs/specs/k7art.md §8).
+    const paper = prims.find(
+      (p) => isObject(p) && p.t === "rect" && p.fill === "paper",
+    ) as Record<string, unknown> | undefined;
+    if (paper)
+      mask = {
+        color: isColour(inks.paper) ? inks.paper : fallbackPaper,
+        radius: isNum(paper.r) ? paper.r : 0,
+        collapsed: false,
+      };
+  } else {
+    const raw = label.mask;
+    if (raw !== undefined) {
+      if (!isObject(raw)) throw new Error("mask must be an object with color and r");
+      if (!isColour(raw.color)) throw new Error(`mask.color ${JSON.stringify(raw.color)} is not #RRGGBB`);
+      const r = raw.r ?? 0;
+      if (!isNum(r) || r < 0) throw new Error(`mask.r ${JSON.stringify(r)} is not a corner radius`);
+      mask = { color: raw.color, radius: r, collapsed: false };
+    }
+  }
+  if (aperture !== undefined && !mask) throw new Error("aperture without a mask (the paper it cuts)");
 
   const out: Obj[] = [];
   let id = 0;
@@ -700,8 +637,11 @@ function importLabelSection(
     if (mask) o.m = true;
     return o;
   };
+  const paperPrim = inks
+    ? prims.find((p) => isObject(p) && p.t === "rect" && p.fill === "paper")
+    : null;
   prims.forEach((p) => {
-    if (p === paper) return;
+    if (p === paperPrim) return;
     if (!isObject(p)) throw new Error(`prim ${id + 1}: not an object`);
     const kind = p.t;
     if (kind !== "rect" && kind !== "text")
@@ -721,10 +661,13 @@ function importLabelSection(
       const align = p.align ?? "left";
       if (align !== "left" && align !== "center" && align !== "right")
         throw new Error(`prim ${id + 1}: align must be left, center or right`);
-      if (!TEXT_ROLES.includes(p.color as string))
-        throw new Error(
-          `text colour "${p.color}" is not ink or one of the eight bands`,
-        );
+      const colour = inks
+        ? roleColour(p.color as string, inks, mask?.color)
+        : isColour(p.color)
+          ? p.color
+          : null;
+      if (!colour)
+        throw new Error(`text colour ${JSON.stringify(p.color)} is not ${inks ? "a v1 role" : "#RRGGBB"}`);
       const o: Obj = {
         id: ++id,
         type: "text",
@@ -733,20 +676,22 @@ function importLabelSection(
         y: p.y,
         w: p.w,
         text: isStatic ? (p.text as string) : (p.preview as string),
-        font: 20,
-        tc: "#151515",
-        ff: "",
         fr: p.font as FontRole,
         align: align as Obj["align"],
-        role: p.color as string,
+        color: colour,
       };
       if (isStatic) o.static = true;
       else if (p.preview !== undefined) o.sim = p.preview as string;
       if (p.rot) o.rot = p.rot;
       out.push(mk(o));
     } else {
-      if (!ROLES.includes(p.fill as string))
-        throw new Error(`fill "${p.fill}" is not a role`);
+      const colour = inks
+        ? roleColour(p.fill as string, inks, mask?.color)
+        : isColour(p.fill)
+          ? p.fill
+          : null;
+      if (!colour)
+        throw new Error(`fill ${JSON.stringify(p.fill)} is not ${inks ? "a v1 role" : "#RRGGBB"}`);
       const o: Obj = {
         id: ++id,
         type: "rect",
@@ -756,8 +701,7 @@ function importLabelSection(
         w: p.w,
         h: p.h as number,
         r: isNum(p.r) ? p.r : 0,
-        color: "#1f2937",
-        role: p.fill as string,
+        color: colour,
       };
       if (p.rot) o.rot = p.rot;
       out.push(mk(o));
@@ -791,9 +735,8 @@ function importLabelSection(
   return { mask, objs: out, nid: id, canvas };
 }
 
-/** One K7Art file, read into a fresh document (the inverse of buildTemplate). */
-function importK7Art(d: Record<string, unknown>, fallbackPaper: string): ImportResult {
-  if (d.v !== 1) throw new Error(`not a K7Art v1 (v is ${JSON.stringify(d.v)})`);
+/** The identity and the shared fields of a K7Art file, whatever its version. */
+function readK7ArtHead(d: Record<string, unknown>): Tpl {
   if (typeof d.id !== "string" || !K7_ID.test(d.id))
     throw new Error(`id ${JSON.stringify(d.id)} must look like k7.my-name`);
   if (typeof d.name !== "string" || !d.name.trim())
@@ -803,11 +746,41 @@ function importK7Art(d: Record<string, unknown>, fallbackPaper: string): ImportR
   const tpl = defaultTpl();
   tpl.id = d.id;
   tpl.name = d.name;
-  const paperColour = applyInks(tpl, d.inks, fallbackPaper, true);
   if (!isObject(d.label)) throw new Error("no label -- the design is the pair");
-  const label = importLabelSection(d.label, tpl, paperColour, true);
-  const jcard = importJCard(d.jcard, tpl);
-  return { tpl, ...label, groups: [], name: d.name, jcard };
+  return tpl;
+}
+
+/**
+ * One K7Art v2 file, read into a fresh document (the inverse of buildTemplate). Every prim
+ * carries its own colour; the label's mask is the section's field.
+ */
+function importK7ArtV2(d: Record<string, unknown>, fallbackPaper: string): ImportResult {
+  if (d.v !== 2) throw new Error(`not a K7Art v2 (v is ${JSON.stringify(d.v)})`);
+  const tpl = readK7ArtHead(d);
+  const label = importLabelSection(d.label as Record<string, unknown>, tpl, {
+    fallbackPaper,
+    requireFonts: true,
+  });
+  const jcard = importJCard(d.jcard, null);
+  return { tpl, ...label, groups: [], name: tpl.name, jcard };
+}
+
+/**
+ * One K7Art v1 file: its roles resolve through its own inks, its full-print paper rect
+ * becomes the label's mask, and its J-card's paper becomes its background (k7art.md §8).
+ */
+function importK7ArtV1(d: Record<string, unknown>, fallbackPaper: string): ImportResult {
+  if (d.v !== 1) throw new Error(`not a K7Art (v is ${JSON.stringify(d.v)})`);
+  const tpl = readK7ArtHead(d);
+  const inks = readInks(d.inks, "the K7Art");
+  if (!inks) throw new Error("no inks -- a v1 design names its colours by role");
+  const label = importLabelSection(d.label as Record<string, unknown>, tpl, {
+    inks,
+    fallbackPaper,
+    requireFonts: true,
+  });
+  const jcard = importJCard(d.jcard, inks);
+  return { tpl, ...label, groups: [], name: tpl.name, jcard };
 }
 
 /**
@@ -820,14 +793,14 @@ function importRetired(d: Record<string, unknown>, fallbackPaper: string): Impor
   const tpl = defaultTpl();
   tpl.id = migrateId(typeof d.id === "string" ? d.id : "");
   tpl.name = typeof d.name === "string" ? d.name : "";
-  const paperColour = applyInks(tpl, d.inks, fallbackPaper, false);
-  const label = importLabelSection(d, tpl, paperColour, false);
+  const inks = readInks(d.inks, "the label template");
+  const label = importLabelSection(d, tpl, { inks, fallbackPaper, requireFonts: false });
   return {
     tpl,
     ...label,
     groups: [],
     name: tpl.name,
-    jcard: starterJCard(tpl),
+    jcard: starterJCard(tpl, label.mask?.color),
   };
 }
 
@@ -839,13 +812,17 @@ function importRetired(d: Record<string, unknown>, fallbackPaper: string): Impor
 export function importTemplate(text: string, fallbackPaper: string): ImportResult {
   const raw: unknown = JSON.parse(text);
   if (!isObject(raw)) throw new Error("not a JSON object, so not a K7Art");
-  if (raw.format === "k7art") return importK7Art(raw, fallbackPaper);
+  if (raw.format === "k7art") {
+    if (raw.v === 2) return importK7ArtV2(raw, fallbackPaper);
+    if (raw.v === 1) return importK7ArtV1(raw, fallbackPaper);
+    throw new Error(`not a K7Art (v is ${JSON.stringify(raw.v)})`);
+  }
   if (raw.format !== undefined)
     throw new Error(
       `not a K7Art: format is ${JSON.stringify(raw.format)}, and the file and the App read only "k7art"`,
     );
   if (raw.v === 1 && Array.isArray(raw.prims)) return importRetired(raw, fallbackPaper);
   throw new Error(
-    "not a K7Art (it needs format, v, id, name, inks, label and jcard)",
+    "not a K7Art (it needs format, v, id, name, label and jcard)",
   );
 }

@@ -15,11 +15,11 @@ import {
   buildTemplate,
   canvasOf,
   DEFAULT_CANVAS,
+  DEFAULT_PAPER,
   defaultTpl,
   importTemplate,
   migrateDocData,
-  normalizeRoles,
-  roleColorOf,
+  normaliseColours,
   simText,
   syncSlots,
   tplText,
@@ -34,6 +34,10 @@ import {
   migrateJCard,
   type JCardField,
 } from "./jcard";
+import {
+  DEFAULT_INK,
+  isColour,
+} from "./vocab";
 import {
   frameOf,
   scaleFactor,
@@ -108,7 +112,7 @@ export class Editor {
   mask: Mask | null = null;
   tpl: Tpl = defaultTpl();
   /** The design's J-card: the other half of the one document, and of every undo step. */
-  jcard: JCardDoc = migrateJCard(undefined, defaultTpl());
+  jcard: JCardDoc = migrateJCard(undefined, defaultTpl(), null, null);
   /**
    * Which of the one document's two surfaces is active. The model is one: the selection,
    * the undo, the autosave and the file cover both surfaces; only the stage and the
@@ -225,15 +229,9 @@ export class Editor {
     const ids = this.selIds;
     return list.filter((o) => ids.includes(o.id));
   }
-  roleColor(r: string): string | null {
-    // The J-card has no LayerMask, and its paper is the sheet's own: the label's paper and
-    // the sheet's move independently (Spec §2), and the webapp draws `jcard.paper` on the
-    // case. Its other roles are the container's, the same eleven.
-    if (this.surface === "jcard" && r === "paper") return this.jcard.paper;
-    return roleColorOf(r, this.surface === "jcard" ? null : this.mask, this.tpl);
-  }
   fillOf(o: Obj): string {
-    return (o.role && this.roleColor(o.role)) || (o.type === "text" ? o.tc : o.color) || "#000000";
+    if (isColour(o.color)) return o.color;
+    return o.type === "text" ? DEFAULT_INK : DEFAULT_PAPER;
   }
   frOf(o: Obj, surface: Surface = this.surface) {
     if (surface === "jcard") {
@@ -513,10 +511,8 @@ export class Editor {
         w: 420,
         text: "",
         sim: "Neon Skyline",
-        font: 36,
-        tc: "#ffffff",
         fr: "title",
-        role: "band.6",
+        color: "#b9ac8e",
       },
       {
         id: 4,
@@ -527,10 +523,8 @@ export class Editor {
         w: 400,
         text: "",
         sim: "124",
-        font: 48,
-        tc: "#ff5b1f",
         fr: "numeral",
-        role: "band.0",
+        color: "#c68b2e",
       },
     ];
   }
@@ -547,8 +541,8 @@ export class Editor {
     this.selMask = false;
     this.fixMask();
     this.tpl = data.tpl || defaultTpl();
-    this.jcard = migrateJCard(data.jcard, this.tpl);
-    normalizeRoles(this.objs, this.mask, this.tpl);
+    this.jcard = migrateJCard(data.jcard, this.tpl, null, this.mask);
+    normaliseColours(this.objs);
     this.undo = d.undo;
     this.redo = d.redo;
     this.cur = d.cur;
@@ -688,7 +682,7 @@ export class Editor {
     this.mask = d.mask || null;
     if (!this.mask) this.selMask = false;
     this.tpl = d.tpl || defaultTpl();
-    this.jcard = migrateJCard(d.jcard, this.tpl);
+    this.jcard = migrateJCard(d.jcard, this.tpl, null, this.mask);
     const list = this.activeObjs();
     this.sel = this.sel ? list.find((o) => o.id === this.sel!.id) || null : null;
     this.selSet = new Set([...this.selSet].filter((id) => list.some((o) => o.id === id)));
@@ -802,7 +796,7 @@ export class Editor {
           r: 8,
           text: "Text",
           static: t === "text" ? true : undefined,
-          role: t === "text" ? "ink" : "band.0",
+          color: t === "text" ? DEFAULT_INK : PAL[this.nid % PAL.length],
           fr: t === "text" ? "caption" : undefined,
         }
       : {
@@ -813,14 +807,10 @@ export class Editor {
           y: Math.round(p.y),
           w,
           h: hh,
-          color: PAL[this.nid % PAL.length],
+          color: kind === "text" ? DEFAULT_INK : PAL[this.nid % PAL.length],
           r: 8,
           text: "Text",
-          font: 20,
-          tc: "#151515",
-          ff: "",
           static: kind === "text" ? true : undefined,
-          role: kind === "text" ? "ink" : "band.0",
           fr: kind === "text" ? "caption" : undefined,
         };
     if (t === "circle") o.type = "circle";
@@ -1066,9 +1056,8 @@ export class Editor {
   }
   addMask() {
     if (this.surface !== "label") return;
-    // The paper is the container's: a design that had no mask still had a paper ink, and the
-    // mask it adds is that same paper.
-    this.mask = { color: this.tpl.inks.paper || PALETTE[7].c, radius: 10, collapsed: false };
+    // The mask is the design's paper: a colour of its own, painted behind the layers.
+    this.mask = { color: DEFAULT_PAPER, radius: 10, collapsed: false };
     this.objs.forEach((o) => (o.m = true));
     this.selMask = true;
     this.sel = null;
@@ -1384,35 +1373,15 @@ export class Editor {
     this.commit(coalesce);
     this.emit();
   }
-  setRoleColor(role: string, c: string, coalesce = true) {
-    if (role === "paper") {
-      // Two papers: the label's is the mask's, and the J-card's sheet is its own (Spec §2).
-      if (this.surface === "jcard") this.jcard.paper = c;
-      else {
-        this.tpl.inks.paper = c;
-        if (this.mask) this.mask.color = c;
-      }
-    } else if (role === "ink") this.tpl.inks.ink = c;
-    else if (role === "rule") this.tpl.inks.rule = c;
-    else if (/^band\.[0-7]$/.test(role)) this.tpl.inks.band[+role.slice(5)] = c;
-    this.commit(coalesce);
-    this.emit();
-  }
-  /** The J-card's paper is the sheet's own: the label's paper and inks do not move with it. */
-  setJCardPaper(c: string, coalesce = true) {
-    this.jcard.paper = c;
+  /** The J-card's background is the sheet's own: the label's mask does not move with it. */
+  setJCardBackground(c: string, coalesce = true) {
+    this.jcard.background = c;
     this.commit(coalesce);
     this.emit();
   }
   setTplField(k: string, v: string, coalesce = false) {
     if (k === "id") this.tpl.id = v;
     else if (k === "name") this.tpl.name = v;
-    else if (k === "ink") this.tpl.inks.ink = v;
-    else if (k === "rule") this.tpl.inks.rule = v;
-    else if (k === "paper") {
-      this.tpl.inks.paper = v;
-      if (this.mask) this.mask.color = v;
-    } else if (k.startsWith("band")) this.tpl.inks.band[+k.slice(4)] = v;
     else if (k.startsWith("ff:")) {
       const r = k.slice(3) as keyof Tpl["fonts"];
       const sizes = sheetSizes(v);
@@ -1455,10 +1424,7 @@ export class Editor {
   setMaskField(k: "color" | "radius", v: string | number) {
     if (!this.mask) return;
     if (k === "radius") this.mask.radius = +v || 0;
-    else {
-      this.mask.color = String(v);
-      this.tpl.inks.paper = this.mask.color;
-    }
+    else this.mask.color = String(v);
     this.commit(true);
     this.emit();
   }
@@ -1617,7 +1583,7 @@ export class Editor {
           d.data.mask ?? null,
           tpl,
           canvasOf(d.data),
-          migrateJCard(d.data.jcard, tpl),
+          migrateJCard(d.data.jcard, tpl, null, d.data.mask ?? null),
         ).errs,
       };
     });

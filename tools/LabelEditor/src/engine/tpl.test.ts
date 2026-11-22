@@ -24,10 +24,15 @@ import {
 import { SLOTS, WIN } from "./vocab";
 import type { DocData, Mask, Obj, Tpl } from "./types";
 
+const INK = "#151515";
+const BAND1 = "#a24e2c";
+const BAND2 = "#8a5d34";
+const RULE = "#8e7e4a";
+
 const mask: Mask = { color: "#c7a867", radius: 10, collapsed: false };
 
 const objs: Obj[] = [
-  { id: 1, type: "rect", name: "", x: 40, y: 30, w: 200, h: 120, r: 10, role: "band.2", rot: 15 },
+  { id: 1, type: "rect", name: "", x: 40, y: 30, w: 200, h: 120, r: 10, color: BAND2, rot: 15 },
   {
     id: 2,
     type: "text",
@@ -36,7 +41,7 @@ const objs: Obj[] = [
     y: 40,
     w: 380,
     fr: "title",
-    role: "band.1",
+    color: BAND1,
     align: "right",
     sim: "Neon Skyline",
   },
@@ -50,7 +55,7 @@ const objs: Obj[] = [
     y: 120,
     w: 380,
     fr: "numeral",
-    role: "ink",
+    color: INK,
     align: "center",
     rot: -5,
   },
@@ -64,12 +69,12 @@ const design = (): Tpl => {
 };
 
 /**
- * The label section the retired builder wrote for the design above, in the section's own key
- * order. The bytes are the regression: the container changed where the section lives and
- * where its identity and inks went, not a byte of what the sheet reads.
+ * The label section the design above writes, in the section's own key order. The bytes are
+ * the regression: a v2 section has the mask as a field and a colour on every prim.
  */
 const expectedLabel = {
   space: { w: 748, h: 359 },
+  mask: { color: "#c7a867", r: 10 },
   canvas: { backgrounds: [DEFAULT_CANVAS], active: 0 },
   fonts: {
     title: { ff: "Archivo Narrow 600", px: 32 },
@@ -78,8 +83,7 @@ const expectedLabel = {
   },
   slots: { song_title: { max: 96 } },
   prims: [
-    { t: "rect", x: 0, y: 0, w: 748, h: 359, r: 10, fill: "paper", still: true },
-    { t: "rect", x: 40, y: 30, w: 200, h: 120, r: 10, rot: 15, fill: "band.2", still: true },
+    { t: "rect", x: 40, y: 30, w: 200, h: 120, r: 10, rot: 15, fill: BAND2, still: true },
     {
       t: "text",
       slot: "song_title",
@@ -87,7 +91,7 @@ const expectedLabel = {
       y: 40,
       w: 380,
       font: "title",
-      color: "band.1",
+      color: BAND1,
       align: "right",
       preview: "Neon Skyline",
     },
@@ -98,7 +102,7 @@ const expectedLabel = {
       w: 380,
       rot: -5,
       font: "numeral",
-      color: "ink",
+      color: INK,
       align: "center",
       text: "STATIC",
     },
@@ -106,63 +110,55 @@ const expectedLabel = {
 };
 
 describe("buildTemplate", () => {
-  it("writes one K7Art: the container, the label section and the J-card", () => {
-    const tpl = design();
-    const { doc, errs } = buildTemplate(objs, mask, tpl);
+  it("writes one K7Art v2: the container, the label section and the J-card", () => {
+    const { doc, errs } = buildTemplate(objs, mask, design());
     expect(errs).toEqual([]);
     expect(doc.format).toBe("k7art");
-    expect(doc.v).toBe(1);
+    expect(doc.v).toBe(2);
     expect(doc.id).toBe("k7.probe");
     expect(doc.name).toBe("Probe");
-    expect(doc.inks).toEqual({
-      paper: "#c7a867",
-      ink: "#151515",
-      rule: "#8e7e4a",
-      band: tpl.inks.band,
-    });
+    expect(doc).not.toHaveProperty("inks");
     expect(doc.label.space).toEqual({ w: 748, h: 359 });
+    expect(doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
     expect(doc.label.fonts.title).toEqual({ ff: "Archivo Narrow 600", px: 32 });
-    expect(doc.label.prims).toHaveLength(4);
-    expect(doc.label.prims[0]).toMatchObject({ fill: "paper", w: 748, h: 359 });
-    expect(doc.label.prims[1]).toMatchObject({ t: "rect", fill: "band.2", rot: 15 });
-    expect(doc.label.prims[2]).toMatchObject({ t: "text", slot: "song_title", align: "right" });
-    expect(doc.label.prims[3]).toMatchObject({ t: "text", text: "STATIC", rot: -5 });
+    expect(doc.label.prims).toHaveLength(3);
+    expect(doc.label.prims[0]).toMatchObject({ t: "rect", fill: BAND2, rot: 15 });
+    expect(doc.label.prims[1]).toMatchObject({ t: "text", slot: "song_title", align: "right" });
+    expect(doc.label.prims[2]).toMatchObject({ t: "text", text: "STATIC", rot: -5 });
     expect(doc.label.slots).toEqual({ song_title: { max: 96 } });
     expect(doc.jcard.space).toEqual({ w: 1300, h: 1280, unit: 320 });
   });
 
   it("writes the file's key order, and each section's", () => {
     const { doc } = buildTemplate(objs, mask, design());
-    expect(Object.keys(doc)).toEqual([
-      "format",
-      "v",
-      "id",
-      "name",
-      "inks",
-      "label",
-      "jcard",
-    ]);
-    expect(Object.keys(doc.inks)).toEqual(["paper", "ink", "rule", "band"]);
+    expect(Object.keys(doc)).toEqual(["format", "v", "id", "name", "label", "jcard"]);
     expect(Object.keys(doc.label)).toEqual([
       "space",
+      "mask",
       "canvas",
       "fonts",
       "slots",
       "prims",
     ]);
     expect(Object.keys(doc.label.fonts)).toEqual(["title", "numeral", "caption"]);
-    expect(Object.keys(doc.jcard)).toEqual(["space", "parts", "paper", "fonts", "prims"]);
+    expect(Object.keys(doc.jcard)).toEqual([
+      "space",
+      "parts",
+      "background",
+      "fonts",
+      "prims",
+    ]);
     expect(Object.keys(doc.jcard.space)).toEqual(["w", "h", "unit"]);
     expect(Object.keys(doc.jcard.parts)).toEqual(["flap", "spine", "cover"]);
     expect(Object.keys(doc.jcard.fonts)).toEqual(["title", "numeral", "caption"]);
   });
 
-  it("keeps the label section byte for byte what label-template v1 wrote", () => {
+  it("writes the label section byte for byte", () => {
     const { doc } = buildTemplate(objs, mask, design());
     expect(tplText(doc.label)).toBe(tplText(expectedLabel));
   });
 
-  it("puts the aperture between the space and the canvas, in the section's order", () => {
+  it("puts the aperture between the mask and the canvas, in the section's order", () => {
     const ap: Obj = {
       id: 9,
       type: "rect",
@@ -178,6 +174,7 @@ describe("buildTemplate", () => {
     expect(errs).toEqual([]);
     expect(Object.keys(doc.label)).toEqual([
       "space",
+      "mask",
       "aperture",
       "canvas",
       "fonts",
@@ -185,7 +182,7 @@ describe("buildTemplate", () => {
       "prims",
     ]);
     expect(doc.label.aperture).toEqual({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
-    expect(doc.label.prims).toHaveLength(4);
+    expect(doc.label.prims).toHaveLength(3);
   });
 
   it("carries the canvas presets and the active one", () => {
@@ -197,12 +194,15 @@ describe("buildTemplate", () => {
     expect(doc.label.canvas).toEqual({ backgrounds: ["#101010", "#f5f1e6"], active: 1 });
   });
 
-  it("takes the container's paper from the mask, and the default without one", () => {
-    expect(buildTemplate(objs, mask, design()).doc.inks.paper).toBe("#c7a867");
+  it("writes the mask's colour and radius, and no mask without one", () => {
+    expect(buildTemplate(objs, mask, design()).doc.label.mask).toEqual({
+      color: "#c7a867",
+      r: 10,
+    });
     const bare = buildTemplate(objs, null, design());
     expect(bare.errs).toEqual([]);
-    expect(bare.doc.inks.paper).toBe(DEFAULT_PAPER);
-    expect(bare.doc.label.prims).toHaveLength(3);
+    expect(bare.doc.label).not.toHaveProperty("mask");
+    expect(bare.doc.jcard.background).toBe(DEFAULT_PAPER);
   });
 
   it("refuses a canvas with no background, over the cap, or a bad colour", () => {
@@ -234,9 +234,9 @@ describe("buildTemplate", () => {
 
   it("refuses an id that does not look like k7.my-name", () => {
     const tpl = design();
-    tpl.id = "Probe";
-    expect(buildTemplate(objs, mask, tpl).errs).toContain(
-      'id "Probe" must look like k7.my-name',
+    tpl.id = "probe";
+    expect(buildTemplate(objs, mask, tpl).errs.join("\n")).toContain(
+      'id "probe" must look like k7.my-name',
     );
   });
 
@@ -245,21 +245,23 @@ describe("buildTemplate", () => {
       id: 9,
       type: "rect",
       name: "",
-      x: WIN.x,
-      y: WIN.y,
+      x: 0,
+      y: 0,
       w: WIN.w,
       h: WIN.h,
-      r: 0,
+      r: WIN.r,
       ap: true,
     };
-    const errs = buildTemplate([...objs, ap], mask, design()).errs;
-    expect(errs.join("\n")).toContain("aperture: the Card's window is");
+    expect(buildTemplate([...objs, ap], mask, design()).errs.join("\n")).toContain(
+      "aperture: the Card's window",
+    );
   });
 
   it("refuses a dynamic text that names no field", () => {
-    const loose: Obj = { id: 4, type: "text", name: "", x: 0, y: 0, w: 100, fr: "caption" };
-    const errs = buildTemplate([...objs, loose], mask, design()).errs;
-    expect(errs.join("\n")).toContain("needs a slot name");
+    const nameless: Obj = { id: 4, type: "text", name: "", x: 0, y: 0, w: 100, fr: "title" };
+    expect(buildTemplate([...objs, nameless], mask, design()).errs.join("\n")).toContain(
+      "dynamic text needs a slot name",
+    );
   });
 
   it("refuses a static text with nothing to print", () => {
@@ -268,14 +270,15 @@ describe("buildTemplate", () => {
       type: "text",
       name: "",
       static: true,
-      text: "   ",
+      text: "  ",
       x: 0,
       y: 0,
       w: 100,
-      fr: "caption",
+      fr: "title",
     };
-    const errs = buildTemplate([...objs, empty], mask, design()).errs;
-    expect(errs.join("\n")).toContain("static text is empty");
+    expect(buildTemplate([...objs, empty], mask, design()).errs.join("\n")).toContain(
+      "static text is empty",
+    );
   });
 
   it("drops a slot nothing prints: the slots follow the text layers", () => {
@@ -287,8 +290,8 @@ describe("buildTemplate", () => {
     expect(doc.label.slots).toEqual({ song_title: { max: 96 } });
   });
 
-  it("refuses more prims than the sheet holds", () => {
-    const many: Obj[] = Array.from({ length: 49 }, (_, i) => ({
+  it("counts the mask against the sheet's prim cap", () => {
+    const many: Obj[] = Array.from({ length: 48 }, (_, i) => ({
       id: 100 + i,
       type: "rect" as const,
       name: "",
@@ -296,9 +299,10 @@ describe("buildTemplate", () => {
       y: i,
       w: 10,
       h: 10,
-      role: "band.0",
+      color: "#c68b2e",
     }));
     const errs = buildTemplate([...objs, ...many], mask, design()).errs;
+    expect(errs.join("\n")).toContain("the mask's rect included");
     expect(errs.join("\n")).toContain("and the sheet holds 48 per design");
   });
 
@@ -318,58 +322,28 @@ describe("the J-card section", () => {
       spine: { x: 320, y: 0, w: 160, h: 1280 },
       cover: { x: 480, y: 0, w: 820, h: 1280 },
     });
+    expect(doc.jcard.background).toBe("#c7a867");
     expect(doc.jcard.fonts).toEqual({
       title: { ff: "Archivo Narrow 600", size: 56 },
       numeral: { ff: "Barlow Condensed 700", size: 136 },
       caption: { ff: "IBM Plex Mono 500", size: 31 },
     });
-    expect(doc.jcard.prims).toEqual([
-      { t: "rect", x: 0, y: 0, w: 1300, h: 1280, fill: "paper" },
-      {
-        t: "text",
-        slot: "title",
-        x: 540,
-        y: 900,
-        w: 700,
-        font: "numeral",
-        color: "ink",
-        align: "left",
-        preview: "Neon Skyline",
-      },
-      {
-        t: "text",
-        slot: "artist",
-        x: 540,
-        y: 1060,
-        w: 700,
-        font: "title",
-        color: "ink",
-        align: "left",
-        preview: "The Analog Sons",
-      },
-      {
-        t: "text",
-        slot: "meta",
-        x: 540,
-        y: 1120,
-        w: 700,
-        font: "caption",
-        color: "ink",
-        align: "left",
-        preview: "Side A · Side B",
-      },
-    ]);
+    expect(doc.jcard.prims).toHaveLength(3);
+    expect(doc.jcard.prims[0]).toMatchObject({
+      t: "text",
+      slot: "title",
+      color: INK,
+      preview: "Neon Skyline",
+    });
   });
 
-  it("takes the J-card's paper role and faces from the container", () => {
+  it("takes the J-card's background and faces from the container", () => {
     const tpl = design();
-    const jc = starterJCard(tpl);
+    const jc = starterJCard(tpl, "#102030");
     expect(jc.fonts.title.ff).toBe(tpl.fonts.title.ff);
-    expect(jc.prims[0]).toMatchObject({ role: "paper" });
-    const paper = buildTemplate(objs, mask, tpl).doc.jcard.prims[0] as {
-      fill: string;
-    };
-    expect(paper.fill).toBe("paper");
+    expect(jc.background).toBe("#102030");
+    const doc = buildTemplate(objs, mask, tpl).doc;
+    expect(doc.jcard.background).toBe("#c7a867");
   });
 
   it("writes a static J-card text and one bound to a field", () => {
@@ -385,7 +359,7 @@ describe("the J-card section", () => {
         y: 100,
         w: 200,
         fr: "caption",
-        role: "ink",
+        color: INK,
         align: "center",
       },
       {
@@ -396,30 +370,30 @@ describe("the J-card section", () => {
         y: 60,
         w: 200,
         fr: "caption",
-        role: "band.3",
+        color: "#6b7a2f",
         align: "right",
       },
     );
     const { doc, errs } = buildTemplate(objs, mask, design(), undefined, jcard);
     expect(errs).toEqual([]);
-    expect(doc.jcard.prims[4]).toEqual({
+    expect(doc.jcard.prims[3]).toEqual({
       t: "text",
       x: 500,
       y: 100,
       w: 200,
       font: "caption",
-      color: "ink",
+      color: INK,
       align: "center",
       text: "SIDE A",
     });
-    expect(doc.jcard.prims[5]).toEqual({
+    expect(doc.jcard.prims[4]).toEqual({
       t: "text",
       slot: "meta",
       x: 500,
       y: 60,
       w: 200,
       font: "caption",
-      color: "band.3",
+      color: "#6b7a2f",
       align: "right",
       preview: "Side A · Side B",
     });
@@ -427,7 +401,7 @@ describe("the J-card section", () => {
 
   it("refuses a field, a face, a size or a colour the pair does not carry", () => {
     const jcard = starterJCard(design());
-    jcard.prims[1] = { ...jcard.prims[1], name: "year" };
+    jcard.prims[0] = { ...jcard.prims[0], name: "year" };
     expect(buildTemplate(objs, mask, design(), undefined, jcard).errs.join("\n")).toContain(
       "is not a J-card field",
     );
@@ -444,11 +418,11 @@ describe("the J-card section", () => {
       "outside 4..640 units",
     );
 
-    const paperText = starterJCard(design());
-    paperText.prims[1] = { ...paperText.prims[1], role: "paper" };
+    const role = starterJCard(design());
+    role.prims[0] = { ...role.prims[0], color: "paper" };
     expect(
-      buildTemplate(objs, mask, design(), undefined, paperText).errs.join("\n"),
-    ).toContain("paper has nothing to read against it");
+      buildTemplate(objs, mask, design(), undefined, role).errs.join("\n"),
+    ).toContain("is not #RRGGBB");
   });
 
   it("refuses a J-card layer outside the sheet's +/-4096 units, and over 64 prims", () => {
@@ -467,7 +441,7 @@ describe("the J-card section", () => {
       y: 0,
       w: 10,
       h: 10,
-      role: "ink",
+      color: INK,
     }));
     expect(buildTemplate(objs, mask, design(), undefined, many).errs.join("\n")).toContain(
       "and the App draws 64",
@@ -530,7 +504,7 @@ describe("importTemplate", () => {
     );
   });
 
-  it("refuses an aperture with no paper to cut", () => {
+  it("refuses an aperture with no mask to cut", () => {
     const ap: Obj = {
       id: 9,
       type: "rect",
@@ -543,12 +517,10 @@ describe("importTemplate", () => {
       ap: true,
     };
     const { doc } = buildTemplate([...objs, ap], mask, design());
-    const noPaper = {
-      ...doc,
-      label: { ...doc.label, prims: doc.label.prims.filter((p) => p.fill !== "paper") },
-    };
-    expect(() => importTemplate(JSON.stringify(noPaper), "#c7a867")).toThrow(
-      "aperture without a paper",
+    const noMask = JSON.parse(tplText(doc));
+    delete noMask.label.mask;
+    expect(() => importTemplate(JSON.stringify(noMask), "#c7a867")).toThrow(
+      "aperture without a mask",
     );
   });
 
@@ -560,12 +532,62 @@ describe("importTemplate", () => {
     expect(() => importTemplate(JSON.stringify({ ...doc, format: "label" }), "#c7a867")).toThrow(
       'format is "label"',
     );
-    expect(() => importTemplate(JSON.stringify({ ...doc, v: 2 }), "#c7a867")).toThrow(
-      "not a K7Art v1",
-    );
     expect(() => importTemplate(JSON.stringify({ ...doc, id: "label.probe" }), "#c7a867")).toThrow(
       'id "label.probe" must look like k7.my-name',
     );
+    // A v1 K7Art is the editor's to migrate; one without inks cannot be resolved.
+    expect(() => importTemplate(JSON.stringify({ ...doc, v: 1 }), "#c7a867")).toThrow(
+      "no inks",
+    );
+  });
+
+  it("reads a v1 file's roles through its own inks", () => {
+    const v1 = {
+      format: "k7art",
+      v: 1,
+      id: "k7.old-probe",
+      name: "Old Probe",
+      inks: { paper: "#f5f1e6", ink: "#241a12", rule: RULE, band: ["#c68b2e", "#a24e2c"] },
+      label: {
+        space: { w: 748, h: 359 },
+        canvas: { backgrounds: ["#101010"], active: 0 },
+        fonts: {
+          title: { ff: "Archivo Narrow 600", px: 32 },
+          numeral: { ff: "Barlow Condensed 700", px: 78 },
+          caption: { ff: "IBM Plex Mono 500", px: 18 },
+        },
+        slots: { song_title: { max: 96 } },
+        prims: [
+          { t: "rect", x: 0, y: 0, w: 748, h: 359, r: 10, fill: "paper", still: true },
+          { t: "rect", x: 40, y: 30, w: 200, h: 120, fill: "band.1", still: true },
+          { t: "text", slot: "song_title", x: 300, y: 40, w: 380, font: "title",
+            color: "ink", align: "right", preview: "Neon Skyline" },
+        ],
+      },
+      jcard: {
+        space: { w: 1300, h: 1280, unit: 320 },
+        parts: JCARD_PARTS,
+        paper: "#f5f1e6",
+        fonts: {
+          title: { ff: "Archivo Narrow 600", size: 56 },
+          numeral: { ff: "Barlow Condensed 700", size: 136 },
+          caption: { ff: "IBM Plex Mono 500", size: 31 },
+        },
+        prims: [
+          { t: "rect", x: 0, y: 0, w: 1300, h: 1280, fill: "paper" },
+          { t: "text", slot: "title", x: 540, y: 900, w: 700, font: "numeral",
+            color: "ink", align: "left", preview: "Neon Skyline" },
+        ],
+      },
+    };
+    const back = importTemplate(JSON.stringify(v1), "#c7a867");
+    expect(back.tpl.id).toBe("k7.old-probe");
+    expect(back.mask?.color).toBe("#f5f1e6");
+    expect(back.objs.find((o) => o.type === "rect")?.color).toBe("#a24e2c");
+    expect(back.objs.find((o) => o.type === "text")?.color).toBe("#241a12");
+    expect(back.jcard.background).toBe("#f5f1e6");
+    expect(back.jcard.prims[0].color).toBe("#f5f1e6");
+    expect(back.jcard.prims[1].color).toBe("#241a12");
   });
 
   it("refuses a design without a J-card, or one whose sheet is not the case's", () => {
@@ -587,25 +609,17 @@ describe("importTemplate", () => {
     );
   });
 
-  it("refuses a J-card field, a literal colour or a text on the paper", () => {
+  it("refuses a J-card field, a role colour or more prims than the App draws", () => {
     const { doc } = buildTemplate(objs, mask, design());
     const badField = JSON.parse(tplText(doc));
-    badField.jcard.prims[1].slot = "year";
+    badField.jcard.prims[0].slot = "year";
     expect(() => importTemplate(JSON.stringify(badField), "#c7a867")).toThrow(
       "is not a J-card field",
     );
 
-    const literal = JSON.parse(tplText(doc));
-    literal.jcard.prims[1].color = "#ff0000";
-    expect(() => importTemplate(JSON.stringify(literal), "#c7a867")).toThrow(
-      "literal colour",
-    );
-
-    const onPaper = JSON.parse(tplText(doc));
-    onPaper.jcard.prims[1].color = "paper";
-    expect(() => importTemplate(JSON.stringify(onPaper), "#c7a867")).toThrow(
-      "paper has nothing to read against it",
-    );
+    const role = JSON.parse(tplText(doc));
+    role.jcard.prims[0].color = "ink";
+    expect(() => importTemplate(JSON.stringify(role), "#c7a867")).toThrow("is not #RRGGBB");
 
     const many = JSON.parse(tplText(doc));
     many.jcard.prims = Array.from({ length: 65 }, () => ({
@@ -614,20 +628,11 @@ describe("importTemplate", () => {
       y: 0,
       w: 10,
       h: 10,
-      fill: "ink",
+      fill: "#111111",
     }));
     expect(() => importTemplate(JSON.stringify(many), "#c7a867")).toThrow(
       "more than the 64 the App draws",
     );
-  });
-
-  it("reads a four-band design once, with the editor's eight", () => {
-    const tpl = design();
-    const { doc } = buildTemplate(objs, mask, tpl);
-    doc.inks.band = doc.inks.band.slice(0, 4);
-    const back = importTemplate(JSON.stringify(doc), "#c7a867");
-    expect(back.tpl.inks.band).toHaveLength(8);
-    expect(back.tpl.inks.band.slice(0, 4)).toEqual(doc.inks.band);
   });
 });
 
@@ -639,21 +644,41 @@ describe("the retired label-template v1", () => {
     space: { w: 748, h: 359 },
     canvas: { backgrounds: [DEFAULT_CANVAS], active: 0 },
     slots: { song_title: { max: 96 } },
-    inks: {
-      paper: "#c7a867",
-      ink: "#151515",
-      rule: "#8e7e4a",
-      band: design().inks.band,
-    },
+    inks: { paper: "#c7a867", ink: INK, rule: RULE, band: ["#c68b2e", BAND1, BAND2] },
     fonts: design().fonts,
-    prims: expectedLabel.prims as Array<Record<string, unknown>>,
+    prims: [
+      { t: "rect", x: 0, y: 0, w: 748, h: 359, r: 10, fill: "paper", still: true },
+      { t: "rect", x: 40, y: 30, w: 200, h: 120, r: 10, rot: 15, fill: "band.2", still: true },
+      {
+        t: "text",
+        slot: "song_title",
+        x: 300,
+        y: 40,
+        w: 380,
+        font: "title",
+        color: "band.1",
+        align: "right",
+        preview: "Neon Skyline",
+      },
+      {
+        t: "text",
+        x: 300,
+        y: 120,
+        w: 380,
+        rot: -5,
+        font: "numeral",
+        color: "ink",
+        align: "center",
+        text: "STATIC",
+      },
+    ],
   });
 
-  it("migrates into a K7Art: the label section, the id and a starter J-card", () => {
+  it("migrates into a K7Art v2: the label section, the id and a starter J-card", () => {
     const back = importTemplate(JSON.stringify(legacy()), "#c7a867");
     expect(back.tpl.id).toBe("k7.probe");
     expect(back.tpl.name).toBe("Probe");
-    expect(back.jcard).toEqual(starterJCard(back.tpl));
+    expect(back.jcard).toEqual(starterJCard(back.tpl, "#c7a867"));
     const { doc, errs } = buildTemplate(
       back.objs,
       back.mask,
@@ -662,28 +687,26 @@ describe("the retired label-template v1", () => {
       back.jcard,
     );
     expect(errs).toEqual([]);
-    expect(doc.format).toBe("k7art");
+    expect(doc.v).toBe(2);
     expect(doc.id).toBe("k7.probe");
-    expect(doc.inks).toEqual(legacy().inks);
+    expect(doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
     expect(tplText(doc.label)).toBe(tplText(expectedLabel));
-    expect(doc.jcard.prims).toHaveLength(4);
+    expect(doc.jcard.prims).toHaveLength(3);
   });
 
-  it("keeps an aperture and its paper, and the label section's bytes", () => {
+  it("keeps an aperture and its mask, and the label section's bytes", () => {
     const old = legacy();
     old.aperture = { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r };
-    old.prims = [
-      { t: "rect", x: 0, y: 0, w: 748, h: 359, r: 10, fill: "paper", still: true },
-      ...(expectedLabel.prims.slice(1) as Array<Record<string, unknown>>),
-    ];
     const back = importTemplate(JSON.stringify(old), "#c7a867");
     expect(back.mask).toEqual({ color: "#c7a867", radius: 10, collapsed: false });
     const ap = back.objs.find((o) => o.ap);
     expect(ap).toMatchObject({ x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r });
     const { doc } = buildTemplate(back.objs, back.mask, back.tpl, back.canvas, back.jcard);
+    expect(doc.label.mask).toEqual({ color: "#c7a867", r: 10 });
     expect(tplText(doc.label)).toBe(
       tplText({
         space: expectedLabel.space,
+        mask: { color: "#c7a867", r: 10 },
         aperture: { x: WIN.x, y: WIN.y, w: WIN.w, h: WIN.h, r: WIN.r },
         canvas: expectedLabel.canvas,
         fonts: expectedLabel.fonts,
@@ -695,7 +718,7 @@ describe("the retired label-template v1", () => {
 });
 
 describe("migrateDocData", () => {
-  const stored = (over: Partial<Tpl> = {}): DocData =>
+  const stored = (over: Record<string, unknown> = {}): DocData =>
     ({
       w: 748,
       h: 359,
@@ -705,14 +728,31 @@ describe("migrateDocData", () => {
       objs: [],
       nid: 0,
       mask: { color: "#c7a867", radius: 10, collapsed: false },
-      tpl: { ...defaultTpl(), id: "label.old", ...over },
+      tpl: {
+        ...defaultTpl(),
+        id: "label.old",
+        inks: { paper: "#c7a867", ink: INK, rule: RULE, band: ["#c68b2e", BAND1] },
+        ...over,
+      },
     }) as DocData;
 
   it("gives a stored document its K7Art id and a starter J-card", () => {
     const data = migrateDocData(stored());
     expect(data.tpl!.id).toBe("k7.old");
-    expect(data.jcard).toEqual(starterJCard(data.tpl!));
-    expect(data.jcard!.prims[0]).toMatchObject({ role: "paper" });
+    expect(data.jcard).toEqual(starterJCard(data.tpl!, "#c7a867"));
+    expect(data.tpl).not.toHaveProperty("inks");
+  });
+
+  it("resolves a stored layer's role through the document's inks", () => {
+    const data = stored();
+    data.objs = [
+      { id: 1, type: "rect", name: "", x: 0, y: 0, w: 10, h: 10, role: "band.1" } as Obj,
+      { id: 2, type: "text", name: "", x: 0, y: 0, w: 10, role: "ink" } as Obj,
+    ];
+    const out = migrateDocData(data);
+    expect(out.objs[0].color).toBe(BAND1);
+    expect(out.objs[1].color).toBe(INK);
+    expect(out.objs[0]).not.toHaveProperty("role");
   });
 
   it("is idempotent, and never moves an id twice", () => {
@@ -725,18 +765,17 @@ describe("migrateDocData", () => {
     expect(tplText(once.jcard)).toBe(first);
   });
 
-  it("takes the paper from the mask, and defaults one without it", () => {
+  it("keeps the mask's colour, and defaults one without it", () => {
     const masked = migrateDocData(stored());
-    expect(masked.tpl!.inks.paper).toBe("#c7a867");
+    expect(masked.mask!.color).toBe("#c7a867");
     const bare = stored();
     bare.mask = null;
-    bare.tpl = { ...bare.tpl!, inks: { ...bare.tpl!.inks, paper: "" } };
-    expect(migrateDocData(bare).tpl!.inks.paper).toBe(DEFAULT_PAPER);
+    expect(migrateDocData(bare).jcard!.background).toBe(DEFAULT_PAPER);
   });
 
   it("keeps a J-card that is already there", () => {
     const data = stored();
-    const jcard = starterJCard(data.tpl!);
+    const jcard = starterJCard(data.tpl!, "#c7a867");
     jcard.fonts.title.size = 90;
     data.jcard = jcard;
     expect(migrateDocData(data).jcard).toMatchObject({
@@ -747,9 +786,6 @@ describe("migrateDocData", () => {
 
 describe("the J-card's own vocabulary", () => {
   it("binds to the label's Slots as well as its own three fields", () => {
-    /* The label's eleven come first: a J-card text may print a tempo or a key where the
-     * surface has one. The J-card's own three are the album's name, its byline and the
-     * cassette line. */
     expect(JCARD_FIELDS).toEqual([...SLOTS.map((slot) => slot.id), "title", "artist", "meta"]);
     expect(JCARD_FIELD_CHOICES).toEqual([...SLOTS.map((slot) => slot.id), "meta"]);
     expect(JCARD_SIMS.title).toBe("Neon Skyline");

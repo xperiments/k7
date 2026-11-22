@@ -1,27 +1,16 @@
 {
   "format": "k7art",
-  "v": 1,
+  "v": 2,
   "id": "k7.voice",
   "name": "Voice",
-  "inks": {
-    "paper": "#8a5d34",
-    "ink": "#f5f1e6",
-    "rule": "#c7a867",
-    "band": [
-      "#f5f1e6",
-      "#c7a867",
-      "#5c3d20",
-      "#df7b35",
-      "#6b7a2f",
-      "#3b6e8f",
-      "#7a3b52",
-      "#241a12"
-    ]
-  },
   "label": {
     "space": {
       "w": 748,
       "h": 359
+    },
+    "mask": {
+      "color": "#8a5d34",
+      "r": 8
     },
     "aperture": {
       "x": 95,
@@ -71,22 +60,12 @@
     "prims": [
       {
         "t": "rect",
-        "x": 0,
-        "y": 0,
-        "w": 748,
-        "h": 359,
-        "r": 8,
-        "fill": "paper",
-        "still": true
-      },
-      {
-        "t": "rect",
         "x": 24,
         "y": 12,
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -96,7 +75,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -106,7 +85,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -116,7 +95,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -126,7 +105,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -136,7 +115,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -146,7 +125,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -156,7 +135,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -166,7 +145,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -176,7 +155,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -186,7 +165,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -196,7 +175,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -206,7 +185,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -216,7 +195,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -226,7 +205,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -236,7 +215,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -246,7 +225,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -256,7 +235,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -266,7 +245,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -276,7 +255,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -286,7 +265,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -296,7 +275,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -306,7 +285,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -316,7 +295,7 @@
         "w": 8,
         "h": 8,
         "r": 4,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -325,7 +304,7 @@
         "y": 2,
         "w": 220,
         "font": "numeral",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "left",
         "text": "VOICE"
       },
@@ -336,7 +315,7 @@
         "y": 6,
         "w": 245,
         "font": "title",
-        "color": "ink",
+        "color": "#f5f1e6",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -347,7 +326,7 @@
         "y": 44,
         "w": 245,
         "font": "caption",
-        "color": "band.1",
+        "color": "#c7a867",
         "align": "left",
         "preview": "The Analog Sons"
       },
@@ -358,7 +337,7 @@
         "w": 76,
         "h": 76,
         "r": 38,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -367,7 +346,7 @@
         "y": 22,
         "w": 76,
         "font": "title",
-        "color": "band.2",
+        "color": "#5c3d20",
         "align": "center",
         "text": "A"
       },
@@ -377,7 +356,7 @@
         "y": 94,
         "w": 700,
         "h": 2,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -386,7 +365,7 @@
         "y": 267,
         "w": 700,
         "h": 2,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       },
       {
@@ -396,7 +375,7 @@
         "y": 276,
         "w": 480,
         "font": "title",
-        "color": "ink",
+        "color": "#f5f1e6",
         "align": "left",
         "preview": "Night Drive"
       },
@@ -407,7 +386,7 @@
         "y": 318,
         "w": 260,
         "font": "caption",
-        "color": "band.1",
+        "color": "#c7a867",
         "align": "left",
         "preview": "relaxed"
       },
@@ -417,7 +396,7 @@
         "y": 276,
         "w": 124,
         "font": "caption",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "right",
         "text": "STEREO"
       },
@@ -428,7 +407,7 @@
         "y": 318,
         "w": 124,
         "font": "caption",
-        "color": "ink",
+        "color": "#f5f1e6",
         "align": "right",
         "preview": "8A"
       },
@@ -438,7 +417,7 @@
         "y": 351,
         "w": 700,
         "h": 2,
-        "fill": "band.0",
+        "fill": "#f5f1e6",
         "still": true
       }
     ]
@@ -469,7 +448,7 @@
         "h": 1280
       }
     },
-    "paper": "#8a5d34",
+    "background": "#8a5d34",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -489,17 +468,9 @@
         "t": "rect",
         "x": 0,
         "y": 0,
-        "w": 1300,
-        "h": 1280,
-        "fill": "paper"
-      },
-      {
-        "t": "rect",
-        "x": 0,
-        "y": 0,
         "w": 80,
         "h": 1280,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -507,7 +478,7 @@
         "y": 0,
         "w": 8,
         "h": 1280,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "rect",
@@ -516,7 +487,7 @@
         "w": 160,
         "h": 160,
         "r": 80,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -524,7 +495,7 @@
         "y": 318,
         "w": 160,
         "font": "title",
-        "color": "band.2",
+        "color": "#5c3d20",
         "align": "center",
         "text": "A"
       },
@@ -534,7 +505,7 @@
         "y": 0,
         "w": 160,
         "h": 1280,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -542,7 +513,7 @@
         "y": 0,
         "w": 10,
         "h": 1280,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -550,7 +521,7 @@
         "y": 540,
         "w": 150,
         "font": "title",
-        "color": "band.2",
+        "color": "#5c3d20",
         "align": "center",
         "text": "VOICE"
       },
@@ -560,7 +531,7 @@
         "y": 620,
         "w": 140,
         "font": "caption",
-        "color": "band.2",
+        "color": "#5c3d20",
         "align": "center",
         "text": "SIDE A"
       },
@@ -570,7 +541,7 @@
         "y": 0,
         "w": 820,
         "h": 230,
-        "fill": "paper"
+        "fill": "#8a5d34"
       },
       {
         "t": "rect",
@@ -578,7 +549,7 @@
         "y": 0,
         "w": 820,
         "h": 8,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -586,7 +557,7 @@
         "y": 30,
         "w": 700,
         "font": "numeral",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "left",
         "text": "VOICE"
       },
@@ -596,9 +567,9 @@
         "y": 168,
         "w": 700,
         "font": "caption",
-        "color": "band.1",
+        "color": "#c7a867",
         "align": "left",
-        "text": "HIGH FIDELITY \u00b7 STEREO"
+        "text": "HIGH FIDELITY · STEREO"
       },
       {
         "t": "rect",
@@ -606,7 +577,7 @@
         "y": 222,
         "w": 820,
         "h": 8,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "rect",
@@ -615,7 +586,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -624,7 +595,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -633,7 +604,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -642,7 +613,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -651,7 +622,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -660,7 +631,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -669,7 +640,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -678,7 +649,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -687,7 +658,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -696,7 +667,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -705,7 +676,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -714,7 +685,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -723,7 +694,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -732,7 +703,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -741,7 +712,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -750,7 +721,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -759,7 +730,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -768,7 +739,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -777,7 +748,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -786,7 +757,7 @@
         "w": 18,
         "h": 18,
         "r": 9,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -795,7 +766,7 @@
         "w": 240,
         "h": 240,
         "r": 120,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -803,7 +774,7 @@
         "y": 300,
         "w": 240,
         "font": "numeral",
-        "color": "band.2",
+        "color": "#5c3d20",
         "align": "center",
         "text": "A"
       },
@@ -813,7 +784,7 @@
         "y": 700,
         "w": 820,
         "h": 3,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -822,7 +793,7 @@
         "y": 740,
         "w": 700,
         "font": "numeral",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -833,7 +804,7 @@
         "y": 875,
         "w": 700,
         "font": "title",
-        "color": "band.1",
+        "color": "#c7a867",
         "align": "left",
         "preview": "The Analog Sons"
       },
@@ -844,9 +815,9 @@
         "y": 960,
         "w": 700,
         "font": "caption",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "left",
-        "preview": "Side A \u00b7 Side B"
+        "preview": "Side A · Side B"
       },
       {
         "t": "rect",
@@ -854,7 +825,7 @@
         "y": 1050,
         "w": 820,
         "h": 6,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       },
       {
         "t": "text",
@@ -862,9 +833,9 @@
         "y": 1090,
         "w": 700,
         "font": "caption",
-        "color": "band.0",
+        "color": "#f5f1e6",
         "align": "left",
-        "text": "SIDE A \u00b7 STEREO"
+        "text": "SIDE A · STEREO"
       },
       {
         "t": "rect",
@@ -873,7 +844,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -882,7 +853,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -891,7 +862,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -900,7 +871,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -909,7 +880,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -918,7 +889,7 @@
         "w": 14,
         "h": 14,
         "r": 7,
-        "fill": "band.1"
+        "fill": "#c7a867"
       },
       {
         "t": "rect",
@@ -926,7 +897,7 @@
         "y": 1274,
         "w": 820,
         "h": 6,
-        "fill": "band.0"
+        "fill": "#f5f1e6"
       }
     ]
   }

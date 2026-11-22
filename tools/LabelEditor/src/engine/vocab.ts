@@ -33,16 +33,13 @@ export const SZ: Record<string, [number, number]> = {
   text: [200, 24],
 };
 
-export const DEFAULT_BANDS = [
-  "#c68b2e",
-  "#a24e2c",
-  "#8a5d34",
-  "#6b7a2f",
-  "#3b6e8f",
-  "#7a3b52",
-  "#b9ac8e",
-  "#2f4b3a",
-];
+/** The ink a new text starts in, and the colour a layer without one falls back to. */
+export const DEFAULT_INK = "#151515";
+
+/** A colour is seven characters: `#` and six hex digits, either case. */
+export const HEX = /^#[0-9a-f]{6}$/i;
+export const isColour = (v: unknown): v is string =>
+  typeof v === "string" && HEX.test(v);
 
 // The vocabulary, read the way the editor needs it.
 export const SLOTS = VOCAB.slots;
@@ -51,12 +48,6 @@ export const CANVAS_MAX = VOCAB.canvas;
 export const WIN = VOCAB.aperture;
 export const LIMITS = VOCAB.limits;
 export const COORDS = VOCAB.coords;
-export const BAND_ROLES = Array.from(
-  { length: VOCAB.bands },
-  (_, i) => `band.${i}`,
-);
-export const TEXT_ROLES = ["ink", ...BAND_ROLES];
-export const ROLES = ["paper", "ink", ...BAND_ROLES, "rule"];
 export const FROLES = Object.keys(VOCAB.defaults.fonts) as Array<
   keyof typeof VOCAB.defaults.fonts
 >;

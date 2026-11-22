@@ -92,8 +92,8 @@ try {
     templateId: opts.id,
     name: opts.name,
     background: "#ffffff",
-    paper: "#c7a867",
-    paperRadius: 12,
+    maskColor: "#c7a867",
+    maskRadius: 12,
   });
 
   // A dark print with the word in the sheet's display face, centred.
@@ -103,7 +103,7 @@ try {
     y: 0,
     width: 748,
     height: 359,
-    role: "band.7",
+    color: "#2f4b3a",
   });
   await call("k7art-add-layer", {
     type: "text",
@@ -111,7 +111,7 @@ try {
     x: 274,
     y: 140,
     width: 200,
-    role: "band.6",
+    color: "#b9ac8e",
     fontRole: "numeral",
     align: "center",
     layerName: opts.text,

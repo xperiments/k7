@@ -46,7 +46,7 @@ test("offers the editor to WebMCP, and its tools edit the design", async ({ page
       text: "Hello agent",
       x: 120,
       y: 200,
-      role: "band.2",
+      color: "#8a5d34",
       fontRole: "title",
     });
   });
@@ -161,9 +161,9 @@ test("hides a layer from the read, the canvas and the export", async ({ page }) 
     return { before, after, shown, hidden: hidden.jcard.layers.find((l: { id: number }) => l.id === title.id) };
   });
 
-  expect(out.before).toBe(4);
-  expect(out.after).toBe(3);
-  expect(out.shown).toBe(4);
+  expect(out.before).toBe(3);
+  expect(out.after).toBe(2);
+  expect(out.shown).toBe(3);
   expect(out.hidden.hidden).toBe(true);
 });
 
@@ -184,7 +184,7 @@ test("binds a J-card text to the label's fields", async ({ page }) => {
       field: "bpm",
       x: 520,
       y: 300,
-      role: "ink",
+      color: "#151515",
       fontRole: "numeral",
     });
     const exported = await call("k7art-export-template");
@@ -220,7 +220,7 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
       text: "Case",
       x: 600,
       y: 300,
-      role: "ink",
+      color: "#151515",
       fontRole: "title",
     });
     /* A second J-card layer, so the two can be a group: the grouping is the same feature
@@ -232,7 +232,7 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
       y: 240,
       width: 140,
       height: 60,
-      role: "band.1",
+      color: "#a24e2c",
     });
     const grouped = await call("k7art-group-layers", {
       surface: "jcard",
@@ -241,8 +241,8 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
     });
     const design = await call("k7art-set-design", {
       jcardFonts: { title: { size: 60 } },
-      /* The sheet's own paper, which is not the label's: one argument each. */
-      jcardPaper: "#142538",
+      /* The sheet's own background, which is not the label's mask: one argument each. */
+      jcardBackground: "#142538",
     });
     const field = await call("k7art-set-field-value", {
       surface: "jcard",
@@ -291,8 +291,8 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
     )!.size,
   ).toBe(60);
   expect(out.field.value).toBe("Case Study");
-  /* The J-card's paper is readable and did not move the label's. */
-  expect(out.read.jcard.paper).toBe("#142538");
+  /* The J-card's background is readable and did not move the label's mask. */
+  expect(out.read.jcard.background).toBe("#142538");
   /* The sheet's layers group like the label's, and ungroup again. */
   expect(out.grouped.groups.length).toBe(1);
   expect((out.grouped.groups[0] as { layers: number[] }).layers.length).toBe(2);
@@ -304,7 +304,7 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
   expect((out.bad.errors as string[]).join("\n")).toContain("slug");
   expect(out.pub.ok).toBe(true);
   expect(out.pub.filename).toBe("neon-2026.k7artpack");
-  expect(out.pub.sheetVersion).toBe(4);
+  expect(out.pub.sheetVersion).toBe(5);
   expect(out.pub.fontCount).toBe(6);
   const bytes = Buffer.from(out.pub.base64 as string, "base64");
   expect(bytes.subarray(0, 8).toString("latin1")).toBe("K7ART\u0000\u0000\u0000");
@@ -313,7 +313,7 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
   expect(bytes.readUInt32LE(12)).toBe(bytes.length);
   expect(bytes.readUInt32LE(16)).toBe(out.pub.crc32);
   expect(bytes.readUInt16LE(20)).toBe(out.pub.designCount);
-  expect(bytes.readUInt16LE(22)).toBe(4);
+  expect(bytes.readUInt16LE(22)).toBe(5);
   expect(bytes.readUInt16LE(24)).toBe(6);
   expect(bytes.readUInt32LE(28)).toBe(128);
   expect(bytes.readUInt32LE(32)).toBe(out.pub.header.sheetSize);
@@ -322,9 +322,9 @@ test("edits the J-card surface and publishes a pack", async ({ page }) => {
   expect(bytes.subarray(128, 136).toString("latin1")).toBe("K7LBL\u0000\u0000\u0000");
   const jcards = JSON.parse(
     bytes.subarray(128 + out.pub.header.sheetSize).toString("utf8"),
-  ) as { v: number; designs: Array<{ id: string; inks: unknown; jcard: unknown }> };
-  expect(jcards.v).toBe(1);
+  ) as { v: number; designs: Array<{ id: string; inks?: unknown; jcard: unknown }> };
+  expect(jcards.v).toBe(2);
   expect(jcards.designs.map((d) => d.id)).toEqual(out.pub.designIds);
-  expect(jcards.designs[0].inks).toBeTruthy();
+  expect(jcards.designs[0].inks).toBeUndefined();
   expect(jcards.designs[0].jcard).toBeTruthy();
 });

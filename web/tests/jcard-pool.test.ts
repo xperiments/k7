@@ -27,6 +27,14 @@ const REFERENCE: Array<[string, string]> = [
   ['Quiet Engine', 'Ruben Ito'],
 ];
 
+/** Every factory file's id, so the test fails if a design is silently left out. */
+const ASSET_IDS = Object.values(
+  import.meta.glob('../../assets/k7art/*.json', {
+    eager: true,
+    import: 'id',
+  }) as Record<string, string>,
+).sort();
+
 /** The first factory design, used as the shape of a second, user-pack design. */
 function secondDesign() {
   const first = FACTORY_JCARDS[0];
@@ -41,14 +49,17 @@ afterEach(() => {
 describe('the factory J-cards', () => {
   it('bundles every design in assets/k7art in id order', () => {
     const designs = factoryDesigns();
-    expect(designs.length).toBeGreaterThan(0);
-    expect(designs.some((design) => design.id === 'k7.neon')).toBe(true);
     const ids = designs.map((design) => design.id);
+    expect(ids).toEqual(ASSET_IDS);
     expect(ids).toEqual([...ids].sort());
     for (const design of designs) {
       expect(design.id).toMatch(/^k7\.[a-z0-9][a-z0-9-]*$/);
       expect(design.jcard.space).toEqual({ w: 1300, h: 1280, unit: 320 });
+      expect(design.jcard.background).toMatch(/^#[0-9a-f]{6}$/i);
       expect(design.jcard.fonts.numeral.size).toBeGreaterThanOrEqual(4);
+      for (const prim of design.jcard.prims) {
+        expect(prim.t === 'rect' ? prim.fill : prim.color).toMatch(/^#[0-9a-f]{6}$/i);
+      }
     }
   });
 
@@ -70,7 +81,7 @@ describe('the Cover pool', () => {
   });
 
   it('installs a parsed pack and resets to the factory', () => {
-    const installed = setUserJcardPack({ v: 1, designs: [secondDesign()] });
+    const installed = setUserJcardPack({ v: 2, designs: [secondDesign()] });
     expect(installed).toHaveLength(1);
     expect(activePool()).toHaveLength(FACTORY_JCARDS.length + 1);
     expect(activePool().at(-1)?.id).toBe('k7.second');
@@ -81,7 +92,7 @@ describe('the Cover pool', () => {
   });
 
   it('changes nothing when a pack payload is not a pack', () => {
-    expect(setUserJcardPack({ v: 2, designs: [] })).toBeNull();
+    expect(setUserJcardPack({ v: 1, designs: [] })).toBeNull();
     expect(activePool()).toEqual(FACTORY_JCARDS);
   });
 

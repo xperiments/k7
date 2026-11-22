@@ -11,7 +11,7 @@ test("boots with the Design panel and one section open", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("K7Art")).toBeVisible();
   await expect(sectionButton(page, "Template")).toHaveAttribute("aria-expanded", "true");
-  await expect(sectionButton(page, "Colors")).toHaveAttribute("aria-expanded", "false");
+  await expect(sectionButton(page, "Canvas")).toHaveAttribute("aria-expanded", "false");
 });
 
 test("opens one section at a time, and the open one cannot be closed", async ({ page }) => {
@@ -20,8 +20,8 @@ test("opens one section at a time, and the open one cannot be closed", async ({ 
   await sectionButton(page, "Template").click();
   await expect(sectionButton(page, "Template")).toHaveAttribute("aria-expanded", "true");
 
-  await sectionButton(page, "Colors").click();
-  await expect(sectionButton(page, "Colors")).toHaveAttribute("aria-expanded", "true");
+  await sectionButton(page, "Canvas").click();
+  await expect(sectionButton(page, "Canvas")).toHaveAttribute("aria-expanded", "true");
   await expect(sectionButton(page, "Template")).toHaveAttribute("aria-expanded", "false");
 });
 
@@ -79,7 +79,7 @@ test("imports a factory K7Art", async ({ page }) => {
   });
   expect(exported.format).toBe("k7art");
   expect(exported.id).toBe("k7.neon");
-  expect(exported.jcard.prims).toHaveLength(4);
+  expect(exported.jcard.prims).toHaveLength(3);
 });
 
 test("migrates a retired label-template v1 into a K7Art", async ({ page }) => {
@@ -130,7 +130,7 @@ test("migrates a retired label-template v1 into a K7Art", async ({ page }) => {
   expect(doc.format).toBe("k7art");
   expect(doc.id).toBe("k7.old");
   expect(doc.label.prims.some((p) => p.text === "HELLO")).toBe(true);
-  expect(doc.jcard.prims).toHaveLength(4);
+  expect(doc.jcard.prims).toHaveLength(3);
 });
 
 test("groups two selected layers from the panel header", async ({ page }) => {
@@ -323,7 +323,7 @@ test("switches to the J-card, edits it, and keeps one document history", async (
   // The toolbar is the focus and the zoom; the sheet's numbers live in the Sheet panel.
   await expect(canvas.getByRole("button", { name: "Sheet", exact: true })).toBeVisible();
   await expect(canvas.getByLabel("Zoom")).toBeVisible();
-  await expect(page.locator('aside[aria-label="Layers"]').getByText("4", { exact: true })).toBeVisible();
+  await expect(page.locator('aside[aria-label="Layers"]').getByText("3", { exact: true })).toBeVisible();
 
   // The J-card's inspector is its own: Sheet, Type and Template, not the label's Canvas and
   // Mask. Its test values are the label's, so there is no Fields panel here.
@@ -355,7 +355,7 @@ test("switches to the J-card, edits it, and keeps one document history", async (
   await expect(page.getByRole("region", { name: "Canvas" })).toBeVisible();
   await page.keyboard.press("Meta+z");
   await page.getByRole("button", { name: "J-card", exact: true }).click();
-  await expect(page.locator('aside[aria-label="Layers"]').getByText("4", { exact: true })).toBeVisible();
+  await expect(page.locator('aside[aria-label="Layers"]').getByText("3", { exact: true })).toBeVisible();
   await expect(page.locator(".canvas-surface")).not.toContainText("Text");
 
   // Focus is the sheet or one part.

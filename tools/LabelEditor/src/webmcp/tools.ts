@@ -18,13 +18,12 @@ import {
   FROLES,
   PRINT_H,
   PRINT_W,
-  ROLES,
   SCREEN_H,
   SCREEN_W,
   SHEET_FONTS,
   SLOTS,
-  TEXT_ROLES,
   WIN,
+  isColour,
   onSheet,
   sheetFaces,
   sheetSizes,
@@ -174,7 +173,7 @@ function layerSummary(ed: Editor, o: Obj, surface: Surface = ed.surface) {
           ? o.text || ""
           : ed.simText(o)
         : null,
-    role: o.role ?? null,
+    color: o.color ?? null,
     x: Math.round(o.x),
     y: Math.round(o.y),
     width: Math.round(o.w),
@@ -195,13 +194,7 @@ function designSummary(ed: Editor) {
     background: ed.bg,
     backgrounds: ed.bgs,
     backgroundIndex: ed.bgi,
-    inks: {
-      paper: ed.tpl.inks.paper,
-      ink: ed.tpl.inks.ink,
-      rule: ed.tpl.inks.rule,
-      band: ed.tpl.inks.band,
-    },
-    paper: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
+    mask: ed.mask ? { colour: ed.mask.color, radius: ed.mask.radius } : null,
     fonts: FROLES.map((role) => ({
       role,
       face: ed.tpl.fonts[role].ff,
@@ -229,8 +222,8 @@ function jcardSummary(ed: Editor) {
       preview: ed.jcardSim(field),
     })),
     focus: ed.focus,
-    /* The sheet's own paper: the label's is `label.mask`'s, and the two are independent. */
-    paper: ed.jcard.paper,
+    /* The sheet's own colour: the label's mask is its own, and the two are independent. */
+    background: ed.jcard.background,
     typeRoles: FROLES.map((role) => ({
       role,
       face: ed.jcard.fonts[role].ff,
@@ -284,7 +277,6 @@ export function labelEditorTools(
             jcard: { width: JCARD_W, height: JCARD_H, unit: 320 },
           },
           fields: SLOTS.map((s) => ({ id: s.id, label: s.label })),
-          roles: { shape: ROLES, text: TEXT_ROLES },
           typeRoles: FROLES.map((role) => ({
             role,
             face: ed.tpl.fonts[role].ff,
@@ -384,8 +376,8 @@ export function labelEditorTools(
             `The field a dynamic text prints. The label's: ${SLOTS.map((s) => s.id).join(", ")}. The J-card's: ${JCARD_FIELDS.join(", ")}. Do not combine with text.`,
             { enum: [...SLOTS.map((s) => s.id), ...JCARD_FIELDS] },
           ),
-          role: str(
-            `The colour role. A shape takes ${ROLES.join(", ")}; a text takes ${TEXT_ROLES.join(", ")}.`,
+          color: str(
+            "The layer's colour, #RRGGBB: a shape's fill or a text's type. Defaults to the swatch row / the ink.",
           ),
           fontRole: str("Which type role a text prints in.", { enum: FROLES }),
           align: str("A text's horizontal alignment.", {
@@ -406,7 +398,7 @@ export function labelEditorTools(
         const field = readField(args, surface);
         const w = readNum(args, "width", 1);
         const h = readNum(args, "height", 1);
-        const role = readStr(args, "role");
+        const color = readStr(args, "color");
         const fontRole = readEnum(args, "fontRole", FROLES);
         const align = readEnum(args, "align", ["left", "center", "right"] as const);
         const layerName = readStr(args, "layerName");
@@ -421,13 +413,8 @@ export function labelEditorTools(
         if (text !== undefined && !text.trim()) throw new Error("text must not be empty");
         if (h !== undefined && type === "text")
           throw new Error("a text's height follows its type; set width (the wrap width)");
-        if (role !== undefined) {
-          const allowed = type === "text" ? TEXT_ROLES : ROLES;
-          if (!allowed.includes(role))
-            throw new Error(
-              `role for a ${type} must be one of ${allowed.join(", ")}`,
-            );
-        }
+        if (color !== undefined && !isColour(color))
+          throw new Error(`color for a ${type} must be #RRGGBB`);
         if (fontRole !== undefined && type !== "text")
           throw new Error("only a text has a font role");
         if (align !== undefined && type !== "text")
@@ -449,7 +436,7 @@ export function labelEditorTools(
           delete o.text;
           if (surface === "jcard") delete o.sim;
         }
-        if (role !== undefined) o.role = role;
+        if (color !== undefined) o.color = color;
         if (fontRole !== undefined) o.fr = fontRole;
         if (align !== undefined) o.align = align;
         if (layerName !== undefined) o.label = layerName;
@@ -469,7 +456,7 @@ export function labelEditorTools(
     {
       name: "k7art-update-layer",
       description:
-        "Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.",
+        "Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour (#RRGGBB), font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.",
       inputSchema: schema(
         {
           surface: str(
@@ -487,7 +474,7 @@ export function labelEditorTools(
             `Make the text dynamic and print this field. The label's: ${SLOTS.map((s) => s.id).join(", ")}. The J-card's: ${JCARD_FIELDS.join(", ")}.`,
             { enum: [...SLOTS.map((s) => s.id), ...JCARD_FIELDS] },
           ),
-          role: str("The colour role to print in."),
+          color: str("The colour to print in, #RRGGBB."),
           fontRole: str("The text's type role.", { enum: FROLES }),
           align: str("The text's horizontal alignment.", {
             enum: ["left", "center", "right"],
@@ -514,7 +501,7 @@ export function labelEditorTools(
         const rot = readNum(args, "rotation");
         const text = readStr(args, "text");
         const field = readField(args, surface);
-        const role = readStr(args, "role");
+        const color = readStr(args, "color");
         const fontRole = readEnum(args, "fontRole", FROLES);
         const align = readEnum(args, "align", ["left", "center", "right"] as const);
         const layerName = readStr(args, "layerName");
@@ -531,13 +518,8 @@ export function labelEditorTools(
         if (text !== undefined && !text.trim()) throw new Error("text must not be empty");
         if (h !== undefined && o.type === "text")
           throw new Error("a text's height follows its type; set width (the wrap width)");
-        if (role !== undefined) {
-          const allowed = o.type === "text" ? TEXT_ROLES : ROLES;
-          if (!allowed.includes(role))
-            throw new Error(
-              `role for a ${o.type} must be one of ${allowed.join(", ")}`,
-            );
-        }
+        if (color !== undefined && !isColour(color))
+          throw new Error(`color for a ${o.type} must be #RRGGBB`);
         if (fontRole !== undefined && o.type !== "text")
           throw new Error("only a text has a font role");
         if (align !== undefined && o.type !== "text")
@@ -567,7 +549,7 @@ export function labelEditorTools(
           delete o.text;
           if (surface === "jcard") delete o.sim;
         }
-        if (role !== undefined) o.role = role;
+        if (color !== undefined) o.color = color;
         if (fontRole !== undefined) o.fr = fontRole;
         if (align !== undefined) o.align = align;
         if (layerName !== undefined) o.label = layerName;
@@ -732,7 +714,7 @@ export function labelEditorTools(
     {
       name: "k7art-set-design",
       description:
-        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the label's paper and the J-card's own paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
+        "Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's LayerMask colour and radius, the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.",
       inputSchema: schema({
         templateId: str("The design id, like k7.my-design; it names the exported file."),
         name: str("The design's human name."),
@@ -745,18 +727,13 @@ export function labelEditorTools(
         activeBackground: num("The index of the editor's preview preset.", {
           minimum: 0,
         }),
-        ink: str("The colour of the ink role, as #rrggbb."),
-        rule: str("The colour of the rule role, as #rrggbb."),
-        bands: list("The eight band colours, as #rrggbb strings, in band order.", {
-          type: "string",
-        }),
-        paper: str(
-          "The label's paper, as #rrggbb: the LayerMask's colour. Adds the LayerMask paper if the design has none.",
+        maskColor: str(
+          "The label's LayerMask colour, as #rrggbb: the paper the design paints behind its layers. Adds the LayerMask if the design has none.",
         ),
-        jcardPaper: str(
-          "The J-card sheet's own paper, as #rrggbb. It starts equal to the label's and moves independently; the webapp paints the sheet with it.",
+        jcardBackground: str(
+          "The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's mask.",
         ),
-        paperRadius: num("The paper's corner radius in design pixels.", { minimum: 0 }),
+        maskRadius: num("The LayerMask's corner radius in design pixels.", { minimum: 0 }),
         fonts: {
           type: "object",
           description:
@@ -827,35 +804,19 @@ export function labelEditorTools(
         }
         const background = readHex(args, "background");
         if (background) ed.setBg(background);
-        const ink = readHex(args, "ink");
-        if (ink) ed.tpl.inks.ink = ink;
-        const rule = readHex(args, "rule");
-        if (rule) ed.tpl.inks.rule = rule;
-        if (args.bands !== undefined) {
-          if (!Array.isArray(args.bands) || args.bands.length !== 8)
-            throw new Error("bands must be the eight band colours, in order");
-          const bands = args.bands.map((b, i) => {
-            if (typeof b !== "string" || !HEX.test(b))
-              throw new Error(`bands[${i}] must be a colour like #c68b2e`);
-            return b.toLowerCase();
-          });
-          ed.tpl.inks.band = bands;
-        }
-        const paper = readHex(args, "paper");
-        const jcardPaper = readHex(args, "jcardPaper");
-        const paperRadius = readNum(args, "paperRadius", 0);
-        if (paperRadius !== undefined && ed.surface !== "label")
+        const maskColor = readHex(args, "maskColor");
+        const jcardBackground = readHex(args, "jcardBackground");
+        const maskRadius = readNum(args, "maskRadius", 0);
+        if (maskRadius !== undefined && ed.surface !== "label")
           throw new Error(
-            "paperRadius is the label's LayerMask; the J-card's sheet has no corner radius",
+            "maskRadius is the label's LayerMask; the J-card's sheet has no corner radius",
           );
-        /* Named apart on purpose: `setRoleColor("paper")` answers by the active surface, and
-         * a tool call should not mean one thing on the label and another on the sheet. */
-        if (paper !== undefined) ed.setTplField("paper", paper);
-        if (jcardPaper !== undefined) ed.setJCardPaper(jcardPaper);
-        if (paperRadius !== undefined) {
+        if (maskColor !== undefined || maskRadius !== undefined) {
           if (!ed.mask) ed.addMask();
-          if (ed.mask) ed.mask.radius = Math.round(paperRadius);
+          if (maskColor !== undefined) ed.setMaskField("color", maskColor);
+          if (maskRadius !== undefined && ed.mask) ed.mask.radius = Math.round(maskRadius);
         }
+        if (jcardBackground !== undefined) ed.setJCardBackground(jcardBackground);
         if (args.fonts !== undefined) {
           if (typeof args.fonts !== "object" || args.fonts === null)
             throw new Error("fonts must be an object keyed by role");

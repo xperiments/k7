@@ -71,7 +71,7 @@ def factory_sheet(tmp):
     return sheet, len(vocab["fonts"])
 
 
-def build_pack(sheet, font_count, design_count=None, sheet_version=4, crc=None,
+def build_pack(sheet, font_count, design_count=None, sheet_version=5, crc=None,
                total_delta=0, jcards=JCARDS):
     design_count = design_count if design_count is not None else struct.unpack_from("<H", sheet, 24)[0]
     payload = sheet + jcards
@@ -297,7 +297,7 @@ def main():
         expect_refused(port, build_pack(sheet, fonts, crc=0x12345678), "checksum disagrees")
         expect_refused(port, build_pack(sheet, fonts, design_count=2), "design_count disagrees")
         expect_refused(port, pack + b"\x00", "bytes past its total size")
-        expect_refused(port, with_sheet_version(pack, sheet, 3), "not sheet version 4")
+        expect_refused(port, with_sheet_version(pack, sheet, 3), "not sheet version 5")
         expect_refused(port, build_pack(sheet, fonts, total_delta=64), "shorter than its total size")
         check("a refused pack left the partition alone", Path(art).read_bytes() == before, True)
         code, _, body = status(port)

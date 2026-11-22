@@ -3707,7 +3707,7 @@
     {
       "id": "K7-07",
       "title": "The K7Art v2 spec: a colour on every element, not a role",
-      "state": "doing",
+      "state": "done",
       "group": "K7",
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
@@ -3717,18 +3717,35 @@
           "at": "2026-11-21T23:27:48Z",
           "by": "deepseek",
           "text": "Plan: ADR 0113 first, then k7art.md to v2 (no inks; label.mask; J-card background; literal prim colours), label-templates.md to a version-5 sheet (16-byte template, colour on every prim) and vocabulary v2 (no bands), art-packs.md (sheet 5, J-cards 2, old pack refused), and the CONTEXT glossary. No code yet."
+        },
+        {
+          "at": "2026-11-21T23:31:27Z",
+          "by": "deepseek",
+          "text": "The contract for v2 is written: ADR 0113, the K7Art spec, the label spec, the pack spec and the glossary.\n\nWhat it says, in the order you would meet it:\n- A K7Art v2 has no `inks`. Every label and J-card prim's `fill`/`color` is a #RRGGBB colour, and any colour can go on any element. The `title`/`numeral`/`caption` type roles stay: they are faces and sizes, not colours.\n- The label's paper is the label section's `mask` (a colour and a corner radius; the LayerMask), and the J-card's sheet is its `background`. Neither is a prim in the file; both sheet writers put the mask in front of the prims as a rect.\n- The label sheet is version 5: a 16-byte template with no ink words and a prim that keeps its 24 bytes and paints a colour at offset 20. The vocabulary is version 2 (no bands); a pack's J-cards are version 2 and its header keeps version 1 with `sheet_version` 5.\n- v1 is read once, in the editor, which resolves each role through its own inks and writes v2. The packer, the firmware and the App read v2 only, so an already-installed pack is refused by version and republished from the editor.\n- ADR 0113 supersedes ADR 0110's shared palette; the one file, two sections, three faces and readers stand.\n\nNothing in the code has changed yet: K7-08 to K7-13 read this.\n\nTo check: open `docs/specs/k7art.md` and the label spec's §2–§3, and the ADR's decision list. If the mask-as-a-field or the republish-for-old-packs calls are wrong, say so here and I revise the contract before the code follows.\n\nNext: K7-08 (the packer and the factory designs) is blocked until this is marked done in the board."
         }
       ]
     },
     {
       "id": "K7-08",
       "title": "The packer writes the v2 sheet, and the factory designs are converted",
-      "state": "todo",
+      "state": "doing",
       "group": "K7",
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "tools/label_pack.py and the editor's TypeScript sheet writer build version-5 sheets from K7Art v2: one colour per prim, no inks in a template record, the vocabulary without bands, and a template record that no longer spends 36 bytes on eleven colours. The five designs in assets/k7art/ are converted to v2, each role resolved to the literal its design's inks gave it, so the factory set looks the same.\n\nFinished means label_pack.py's --selftest and --check-vocabulary pass, make -C host label passes, and the Python and TypeScript writers produce the same bytes for every factory design.\n\nCheck: the factory K7Arts have no inks, and the packed sheet says version 5."
+      "desc": "tools/label_pack.py and the editor's TypeScript sheet writer build version-5 sheets from K7Art v2: one colour per prim, no inks in a template record, the vocabulary without bands, and a template record that no longer spends 36 bytes on eleven colours. The five designs in assets/k7art/ are converted to v2, each role resolved to the literal its design's inks gave it, so the factory set looks the same.\n\nFinished means label_pack.py's --selftest and --check-vocabulary pass, make -C host label passes, and the Python and TypeScript writers produce the same bytes for every factory design.\n\nCheck: the factory K7Arts have no inks, and the packed sheet says version 5.",
+      "notes": [
+        {
+          "at": "2026-11-21T23:33:13Z",
+          "by": "deepseek",
+          "text": "Found while preparing: this task and K7-09 cannot land apart without a red tree. make -C host label builds label_sheet.bin from the designs with this task's writer and then opens it with the firmware reader that K7-09 changes, so a version-5 sheet read by a version-4 reader fails the build. The sheet's writer and reader (label.h/label.c and the painter in cassette_label.c) are one contract. Proposal: this task also carries the firmware reader/painter, and K7-09 becomes the host-plus-board proof (flash, two-finger label, host checks). The human owns that change to the board."
+        },
+        {
+          "at": "2026-11-21T23:55:05Z",
+          "by": "deepseek",
+          "text": "Plan: land the v2 factory designs and vocabulary, apply the validated v5 packer fork (Python and TypeScript), then the firmware reader in the same run so make -C host label stays green; the sheet is pinned to 2835 B / crc 0x2EC19103."
+        }
+      ]
     },
     {
       "id": "K7-09",
@@ -3765,10 +3782,17 @@
       "title": "The App draws v2 J-cards and turns an old pack away",
       "state": "todo",
       "group": "K7",
-      "deps": ["K7-07"],
+      "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
       "by": "deepseek",
-      "desc": "The App's J-card reader and renderer take each prim's colour, the factory designs come in without inks, and a published pack carries J-cards v: 2. A pack built before this change (its sheet is version 4) is refused in the Art packs page with a line saying an older editor made it and to publish it again — nothing half-drawn.\n\nFinished means the shelf and the album card draw the factory J-cards from v2 files, an old pack is refused by name, and web's typecheck, tests and build pass.\n\nCheck: an album with no picture wears its J-card; feed it an old .k7artpack and read the refusal."
+      "desc": "The App's J-card reader and renderer take each prim's colour, the factory designs come in without inks, and a published pack carries J-cards v: 2. A pack built before this change (its sheet is version 4) is refused in the Art packs page with a line saying an older editor made it and to publish it again — nothing half-drawn.\n\nFinished means the shelf and the album card draw the factory J-cards from v2 files, an old pack is refused by name, and web's typecheck, tests and build pass.\n\nCheck: an album with no picture wears its J-card; feed it an old .k7artpack and read the refusal.",
+      "notes": [
+        {
+          "at": "2026-11-21T23:33:34Z",
+          "by": "deepseek",
+          "text": "Found while preparing: this task reads the factory designs from assets/k7art/, and they are converted to v2 in K7-08, so the App's v2 reader has nothing to draw until that lands. Add K7-08 as a dependency (or convert the factory set in this task too). Same reason as the note on K7-08: the format is one contract across the packer, the firmware, the editor and the App."
+        }
+      ]
     },
     {
       "id": "K7-13",

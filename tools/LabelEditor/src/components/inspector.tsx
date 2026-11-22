@@ -67,9 +67,7 @@ import {
   PALETTE,
   PRINT_H,
   PRINT_W,
-  ROLES,
   SLOTS,
-  TEXT_ROLES,
   WIN,
 } from "@/engine/vocab";
 
@@ -245,28 +243,6 @@ function DesignPanel() {
             {PRINT_W} × {PRINT_H}
           </span>
         </div>
-      </Section>
-
-      <Section title="Colors">
-        <p className="text-xs text-muted-foreground">
-          A layer names a role; every layer with that role follows its colour.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <ColourCell label="Ink" value={ed.tpl.inks.ink} onChange={(v) => ed.setRoleColor("ink", v)} />
-          <ColourCell label="Rule" value={ed.tpl.inks.rule} onChange={(v) => ed.setRoleColor("rule", v)} />
-          {ed.tpl.inks.band.map((c, i) => (
-            <ColourCell
-              key={i}
-              label={`Band ${i}`}
-              value={c}
-              onChange={(v) => ed.setRoleColor(`band.${i}`, v)}
-            />
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {ed.objs.filter((o) => o.role && o.role.startsWith("band.")).length} layers use a band
-          · {ed.objs.filter((o) => o.role === "ink").length} use the ink
-        </p>
       </Section>
 
       <Section
@@ -628,40 +604,16 @@ function LayerPanel({ o }: { o: Obj }) {
               </ToggleGroupItem>
             </ToggleGroup>
           </Field>
-          <Field className="gap-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
-            <RoleSelect
-              value={o.role ?? "ink"}
-              roles={TEXT_ROLES}
-              onChange={(v) => ed.setObjField(o, "role", v)}
-              disabled={locked}
-            />
-          </Field>
         </Section>
       ) : (
         <Section title="Appearance">
-          <Field className="gap-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
-            <RoleSelect
-              value={o.role ?? "band.0"}
-              roles={ROLES}
-              onChange={(v) => ed.setObjField(o, "role", v)}
-              disabled={locked}
-            />
-          </Field>
-          {o.role ? (
-            <>
-              <ColourRow
-                label={`Colour of "${o.role}"`}
-                value={ed.roleColor(o.role) ?? "#000000"}
-                onChange={(v) => ed.setRoleColor(o.role!, v)}
-              />
-              <SwatchStrip
-                value={ed.roleColor(o.role) ?? ""}
-                onPick={(c) => ed.setRoleColor(o.role!, c)}
-              />
-            </>
-          ) : null}
+          <ColourRow
+            label="Fill"
+            value={o.color ?? ""}
+            onChange={(v) => ed.setObjField(o, "color", v)}
+            disabled={locked}
+          />
+          <SwatchStrip value={o.color ?? ""} onPick={(c) => ed.setObjField(o, "color", c)} />
           {o.type === "rect" ? (
             <label className="flex items-center gap-2 text-xs">
               <Switch
@@ -686,16 +638,12 @@ function LayerPanel({ o }: { o: Obj }) {
       {isText ? (
         <Section title="Appearance">
           <ColourRow
-            label={o.role ? `Colour of "${o.role}"` : "Colour"}
-            value={o.role ? (ed.roleColor(o.role) ?? "#000000") : (o.tc ?? "#000000")}
-            onChange={(v) => (o.role ? ed.setRoleColor(o.role, v) : ed.setObjField(o, "tc", v))}
+            label="Colour"
+            value={o.color ?? ""}
+            onChange={(v) => ed.setObjField(o, "color", v)}
+            disabled={locked}
           />
-          {o.role ? (
-            <SwatchStrip
-              value={ed.roleColor(o.role) ?? ""}
-              onPick={(c) => ed.setRoleColor(o.role!, c)}
-            />
-          ) : null}
+          <SwatchStrip value={o.color ?? ""} onPick={(c) => ed.setObjField(o, "color", c)} />
         </Section>
       ) : null}
 
@@ -758,9 +706,13 @@ function JCardDesignPanel() {
     <SectionGroup initial="Sheet">
       <Section title="Sheet">
         <ColourRow
-          label="Paper (the sheet's colour)"
-          value={ed.jcard.paper}
-          onChange={(v) => ed.setJCardPaper(v)}
+          label="Background (the sheet's colour)"
+          value={ed.jcard.background}
+          onChange={(v) => ed.setJCardBackground(v)}
+        />
+        <SwatchStrip
+          value={ed.jcard.background}
+          onPick={(c) => ed.setJCardBackground(c)}
         />
         <div className="grid grid-cols-2 gap-2">
           <ReadOnly label="Sheet" value={`${JCARD_W} × ${JCARD_H}`} />
@@ -792,29 +744,6 @@ function JCardDesignPanel() {
             art may cross one.
           </p>
         </Field>
-      </Section>
-
-      <Section title="Colours">
-        <p className="text-xs text-muted-foreground">
-          The container&apos;s eleven roles: the label and the J-card paint from one palette.
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <ColourCell label="Ink" value={ed.tpl.inks.ink} onChange={(v) => ed.setRoleColor("ink", v)} />
-          <ColourCell label="Rule" value={ed.tpl.inks.rule} onChange={(v) => ed.setRoleColor("rule", v)} />
-          {ed.tpl.inks.band.map((c, i) => (
-            <ColourCell
-              key={i}
-              label={`Band ${i}`}
-              value={c}
-              onChange={(v) => ed.setRoleColor(`band.${i}`, v)}
-            />
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {ed.jcard.prims.filter((o) => o.role?.startsWith("band.")).length} J-card layers use a
-          band · {ed.jcard.prims.filter((o) => o.role === "ink").length} use the ink. The sheet is
-          the paper role.
-        </p>
       </Section>
 
       <Section title="Type">
@@ -1073,56 +1002,26 @@ function JCardLayerPanel({ o }: { o: Obj }) {
               </ToggleGroupItem>
             </ToggleGroup>
           </Field>
-          <Field className="gap-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
-            <RoleSelect
-              value={o.role ?? "ink"}
-              roles={TEXT_ROLES}
-              onChange={(v) => ed.setObjField(o, "role", v)}
-              disabled={locked}
-            />
-          </Field>
         </Section>
       ) : (
         <Section title="Appearance">
-          <Field className="gap-1.5">
-            <FieldLabel className="text-xs text-muted-foreground">Colour role</FieldLabel>
-            <RoleSelect
-              value={o.role ?? "band.0"}
-              roles={ROLES}
-              onChange={(v) => ed.setObjField(o, "role", v)}
-              disabled={locked}
-            />
-          </Field>
-          {o.role ? (
-            <>
-              <ColourRow
-                label={`Colour of "${o.role}"`}
-                value={ed.roleColor(o.role) ?? "#000000"}
-                onChange={(v) => ed.setRoleColor(o.role!, v)}
-              />
-              <SwatchStrip
-                value={ed.roleColor(o.role) ?? ""}
-                onPick={(c) => ed.setRoleColor(o.role!, c)}
-              />
-            </>
-          ) : null}
+          <ColourRow
+            label="Fill"
+            value={o.color ?? ""}
+            onChange={(v) => ed.setObjField(o, "color", v)}
+          />
+          <SwatchStrip value={o.color ?? ""} onPick={(c) => ed.setObjField(o, "color", c)} />
         </Section>
       )}
 
       {isText ? (
         <Section title="Appearance">
           <ColourRow
-            label={o.role ? `Colour of "${o.role}"` : "Colour"}
-            value={o.role ? (ed.roleColor(o.role) ?? "#000000") : "#000000"}
-            onChange={(v) => (o.role ? ed.setRoleColor(o.role, v) : undefined)}
+            label="Colour"
+            value={o.color ?? ""}
+            onChange={(v) => ed.setObjField(o, "color", v)}
           />
-          {o.role ? (
-            <SwatchStrip
-              value={ed.roleColor(o.role) ?? ""}
-              onPick={(c) => ed.setRoleColor(o.role!, c)}
-            />
-          ) : null}
+          <SwatchStrip value={o.color ?? ""} onPick={(c) => ed.setObjField(o, "color", c)} />
         </Section>
       ) : null}
 
@@ -1155,14 +1054,10 @@ function JCardMultiPanel() {
   const ed = useEditor();
   const ids = ed.selIds;
   const selected = ed.activeObjs().filter((o) => ids.includes(o.id));
-  const bulkRole = (v: string) => {
+  const bulkColour = (v: string) => {
     selected.forEach((o) => {
       if (o.locked) return;
-      if (o.type === "text") {
-        if (TEXT_ROLES.includes(v)) o.role = v;
-        return;
-      }
-      if (v !== "ink") o.role = v;
+      o.color = v;
     });
     ed.commit(false);
     ed.emit();
@@ -1198,22 +1093,15 @@ function JCardMultiPanel() {
           Set the role of every selected J-card layer. A text takes the ink or a band; a shape
           takes any role.
         </p>
-        <Select
-          value=""
-          onValueChange={(v) => v && bulkRole(v)}
-          items={["", ...ROLES].map((r) => ({ value: r, label: r || "Set role…" }))}
-        >
-          <SelectTrigger size="sm" className="w-full" aria-label="Set the role of the selection">
-            <SelectValue placeholder="Set role of selection…" />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {ROLES.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ColourRow
+          label="Colour"
+          value={selected.find((o) => o.color)?.color ?? ""}
+          onChange={(v) => bulkColour(v)}
+        />
+        <SwatchStrip
+          value={selected.find((o) => o.color)?.color ?? ""}
+          onPick={(c) => bulkColour(c)}
+        />
       </Section>
       <Section title="Layers">
         <div className="flex flex-col gap-1">
@@ -1286,14 +1174,10 @@ function MultiPanel() {
   const ed = useEditor();
   const ids = ed.selIds;
   const selected = ed.objs.filter((o) => ids.includes(o.id));
-  const bulkRole = (v: string) => {
+  const bulkColour = (v: string) => {
     ed.objs.forEach((o) => {
       if (!ids.includes(o.id) || o.locked || o.ap) return;
-      if (o.type === "text") {
-        if (TEXT_ROLES.includes(v)) o.role = v;
-        return;
-      }
-      if (v !== "ink") o.role = v;
+      o.color = v;
     });
     ed.commit(false);
     ed.emit();
@@ -1333,27 +1217,20 @@ function MultiPanel() {
           <p className="text-xs text-muted-foreground">{ed.groupWhy()}</p>
         ) : null}
       </Section>
-      <Section title="Colour role">
+      <Section title="Colour">
         <p className="text-xs text-muted-foreground">
-          Set the role of every selected layer. A text takes the ink or a band; a shape
+          Set every selected layer to one colour. A text takes the ink or a band; a shape
           takes any role.
         </p>
-        <Select
-          value=""
-          onValueChange={(v) => v && bulkRole(v)}
-          items={["", ...ROLES].map((r) => ({ value: r, label: r || "Set role…" }))}
-        >
-          <SelectTrigger size="sm" className="w-full" aria-label="Set the role of the selection">
-            <SelectValue placeholder="Set role of selection…" />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            {ROLES.map((r) => (
-              <SelectItem key={r} value={r}>
-                {r}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ColourRow
+          label="Colour"
+          value={selected.find((o) => o.color)?.color ?? ""}
+          onChange={(v) => bulkColour(v)}
+        />
+        <SwatchStrip
+          value={selected.find((o) => o.color)?.color ?? ""}
+          onPick={(c) => bulkColour(c)}
+        />
       </Section>
       <Section title="Layers">
         <div className="flex flex-col gap-1">
@@ -1488,10 +1365,12 @@ function ColourRow({
   label,
   value,
   onChange,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <Field className="gap-1.5">
@@ -1503,69 +1382,9 @@ function ColourRow({
         swatches={PAL}
         className="w-full justify-start"
         aria-label={label}
+        disabled={disabled}
       />
     </Field>
-  );
-}
-
-function ColourCell({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <ColorPicker
-        value={value}
-        onValueChange={(v) => v && onChange(v)}
-        format="hex"
-        swatches={PAL}
-        className="w-full justify-start"
-        aria-label={label}
-      />
-    </div>
-  );
-}
-
-function RoleSelect({
-  value,
-  roles,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  roles: string[];
-  onChange: (v: string) => void;
-  disabled?: boolean;
-}) {
-  const ed = useEditor();
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => v && onChange(v)}
-      items={roles.map((r) => ({ value: r, label: r }))}
-      disabled={disabled}
-    >
-      <SelectTrigger size="sm" className="w-full">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent alignItemWithTrigger={false}>
-        {roles.map((r) => (
-          <SelectItem key={r} value={r}>
-            <span
-              className="size-2.5 shrink-0 rounded-full border border-border"
-              style={{ background: ed.roleColor(r) ?? "transparent" }}
-            />
-            {r}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 

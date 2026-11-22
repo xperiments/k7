@@ -31,10 +31,10 @@ from pathlib import Path
 
 MAGIC = b"K7LBL\0\0\0"
 FORMAT = "k7art"
-DESIGN_VERSION = 1
-SHEET_VERSION = 4
+DESIGN_VERSION = 2
+SHEET_VERSION = 5
 HEADER_SIZE = 32
-TEMPLATE_SIZE = 64
+TEMPLATE_SIZE = 16
 PRIM_SIZE = 24
 SLOT_SIZE = 8
 
@@ -70,13 +70,8 @@ SLOT_MAX = VOCAB["limits"]["slots"]
 TEMPLATE_MAX = VOCAB["limits"]["templates"]
 VALUE_MAX = VOCAB["value"]
 
-BAND_MAX = VOCAB["bands"]
 CANVAS_MAX = VOCAB["canvas"]
-ROLE_INDEX = {"paper": 0, "ink": 1, "rule": 2}
-ROLE_INDEX.update({f"band.{i}": 3 + i for i in range(BAND_MAX)})
-FILL_LITERAL = 3 + BAND_MAX
 FONT_ROLES = tuple(VOCAB["defaults"]["fonts"])
-TEXT_ROLES = ("ink",) + tuple(f"band.{i}" for i in range(BAND_MAX))
 ALIGN_INDEX = {"left": 0, "center": 1, "right": 2}
 
 # The device's vocabulary: one table, generated into the editor and the reader.
@@ -155,14 +150,8 @@ def _tag(prim, i):
     return f"prim {i}"
 
 
-def jcard_errors(jcard, did, band_declared):
-    """The pair's J-card refusals (docs/specs/k7art.md 7). It never enters the sheet.
-
-    The J-card is the App's, not the panel's: the packer refuses one the webapp could not draw,
-    so a design the editor would refuse at Export is a build failure here too, but it packs only
-    the label section. `band_declared` is the container's own list - a J-card role names a shared
-    ink or there is nothing to print.
-    """
+def jcard_errors(jcard, did):
+    """The pair's J-card refusals (docs/specs/k7art.md 7). It never enters the sheet."""
     errors = []
 
     def add(line):
@@ -188,6 +177,8 @@ def jcard_errors(jcard, did, band_declared):
         if extra:
             add(f"parts names {', '.join(extra)}; the case is flap, spine and cover")
 
+    _hex(jcard.get("background"), f"{did}: jcard background", errors)
+
     fonts = jcard.get("fonts")
     if not isinstance(fonts, dict):
         add("fonts is missing -- the three faces are the pair's")
@@ -209,18 +200,6 @@ def jcard_errors(jcard, did, band_declared):
     if len(prims) > JCARD_PRIM_MAX:
         add(f"{len(prims)} prims, more than the {JCARD_PRIM_MAX} the App draws")
 
-    def role_names(prim, i, allow_paper):
-        what = "fill" if prim.get("t") == "rect" else "color"
-        role = prim.get("fill") if what == "fill" else prim.get("color", "ink")
-        if isinstance(role, str) and role.startswith("#"):
-            add(f"prim {i}: {what} {role!r} is a literal colour; the J-card is role-coloured")
-        elif role not in ROLE_INDEX:
-            add(f"prim {i}: {what} {role!r} is not a role")
-        elif role == "paper" and not allow_paper:
-            add(f"prim {i}: {what} paper has nothing to read against it")
-        elif role.startswith("band.") and int(role[5:]) >= band_declared:
-            add(f"prim {i}: {what} {role} is past this design's {band_declared} bands")
-
     for i, prim in enumerate(prims, 1):
         if not isinstance(prim, dict):
             add(f"prim {i}: not an object")
@@ -235,17 +214,17 @@ def jcard_errors(jcard, did, band_declared):
                  -JCARD_BOUND, JCARD_BOUND)
         w = _int(prim.get("w"), f"{did}: jcard prim {i}: w", errors, 1, JCARD_BOUND)
         _int(prim.get("rot", 0), f"{did}: jcard prim {i}: rot", errors, default=0)
+        what = "fill" if kind == "rect" else "color"
+        _hex(prim.get(what), f"{did}: jcard prim {i}: {what}", errors)
         if kind == "rect":
             h = _int(prim.get("h"), f"{did}: jcard prim {i}: h", errors, 1, JCARD_BOUND)
             _int(prim.get("r", 0), f"{did}: jcard prim {i}: r", errors, lo=0, default=0)
-            role_names(prim, i, allow_paper=True)
         else:
             h = 0
             if prim.get("align", "left") not in ALIGN_INDEX:
                 add(f"prim {i}: align {prim.get('align')!r} is not left, center or right")
             if prim.get("font") not in FONT_ROLES:
                 add(f"prim {i}: font {prim.get('font')!r} is not title, numeral or caption")
-            role_names(prim, i, allow_paper=False)
             if "slot" in prim:
                 if prim["slot"] not in JCARD_FIELDS:
                     add(f'prim {i}: "{prim["slot"]}" is not a J-card field '
@@ -268,11 +247,11 @@ def jcard_errors(jcard, did, band_declared):
 
 
 def pack_design(design, font_index, pool):
-    """One K7Art -> (template fields, prims, slots). Raises PackError(errors).
+    """One K7Art v2 -> (template fields, prims, slots). Raises PackError(errors).
 
-    The container names the design: its `id` is what every refusal names it by, its `name` is
-    the sheet's template name, and its `inks` are the label's colours. The label section is the
-    sheet's; the J-card is checked against the pair's refusals and never enters the sheet.
+    The container names the design; the label section is the sheet's, and its `mask` is
+    synthesised as the first rect (docs/specs/label-templates.md §2-§3). The J-card is checked
+    against the pair's refusals and never enters the sheet.
     """
     errors = []
     did = design.get("id")
@@ -281,23 +260,7 @@ def pack_design(design, font_index, pool):
     if design.get("format") != FORMAT:
         errors.append(f"{did}: format is {design.get('format')!r}, not {FORMAT!r}")
     if design.get("v") != DESIGN_VERSION:
-        errors.append(f"{did}: v is not {DESIGN_VERSION}")
-
-    inks = design.get("inks")
-    if not isinstance(inks, dict):
-        errors.append(f"{did}: no inks -- a design without colours is shapes only")
-        inks = {}
-    paper = _hex(inks.get("paper"), f"{did}: inks.paper", errors, allow_none=True)
-    ink = _hex(inks.get("ink"), f"{did}: inks.ink", errors)
-    rule = _hex(inks.get("rule"), f"{did}: inks.rule", errors)
-    band = inks.get("band")
-    if not isinstance(band, list) or not 4 <= len(band) <= BAND_MAX:
-        errors.append(f"{did}: inks.band must be four to eight colours")
-        band = ["#000000"] * 4
-    band_declared = len(band)
-    band = [_hex(c, f"{did}: inks.band[{i}]", errors) for i, c in enumerate(band)]
-    # The sheet always has eight slots; a design that declares four leaves the rest 0.
-    band += [0] * (BAND_MAX - len(band))
+        errors.append(f"{did}: v is not {DESIGN_VERSION} -- open a v1 design in the editor and export it")
 
     design_name = design.get("name")
     if not isinstance(design_name, str) or not design_name.strip():
@@ -313,11 +276,22 @@ def pack_design(design, font_index, pool):
     if not isinstance(jcard, dict):
         errors.append(f"{did}: no jcard -- the design is the pair")
     else:
-        errors.extend(jcard_errors(jcard, did, band_declared))
+        errors.extend(jcard_errors(jcard, did))
 
     space = label.get("space") or {}
     if (space.get("w"), space.get("h")) != (SPACE_W, SPACE_H):
         errors.append(f"{did}: space is {space.get('w')}x{space.get('h')}, not {SPACE_W}x{SPACE_H}")
+
+    mask = label.get("mask")
+    mask_prim = None
+    if mask is not None:
+        if not isinstance(mask, dict):
+            errors.append(f"{did}: mask must be an object with color and r")
+        else:
+            colour = _hex(mask.get("color"), f"{did}: mask.color", errors)
+            r = _int(mask.get("r", 0), f"{did}: mask.r", errors, lo=0, default=0)
+            if colour is not None and r is not None:
+                mask_prim = (colour, r)
 
     aperture = label.get("aperture")
     if aperture is not None:
@@ -325,6 +299,8 @@ def pack_design(design, font_index, pool):
                aperture.get("h"), aperture.get("r", 0))
         if got != APERTURE:
             errors.append(f"{did}: aperture {got} is not the Card's window {APERTURE}")
+        if mask is None:
+            errors.append(f"{did}: aperture without a mask -- the window is cut out of the paper")
 
     fonts = label.get("fonts")
     if not isinstance(fonts, dict):
@@ -342,10 +318,6 @@ def pack_design(design, font_index, pool):
         else:
             font_ids.append(font_index[key])
 
-    # The canvas is optional. When present, the whole list travels: the player picks an entry
-    # by the Track's cassette row (row % count), so the entries are not editor-only. `active`
-    # is the editor's preview, not the player's choice, but a design that names the list must
-    # name a valid one.
     canvas = label.get("canvas")
     canvas_colors = []
     if canvas is not None:
@@ -376,8 +348,6 @@ def pack_design(design, font_index, pool):
         if name not in SLOT_NAMES:
             errors.append(f'{did}: slot "{name}" is not in the vocabulary')
             continue
-        # VALUE_MAX is LABEL_VALUE_MAX: a design cannot ask for more than the resolver carries,
-        # so the view never has to cut a value the sheet allowed.
         slot_max[name] = _int((spec or {}).get("max"), f'{did}: slot "{name}".max',
                               errors, lo=1, hi=VALUE_MAX)
 
@@ -385,61 +355,40 @@ def pack_design(design, font_index, pool):
     if not isinstance(prims, list) or not prims:
         errors.append(f"{did}: no prims")
         prims = []
-    if len(prims) > PRIM_MAX:
-        errors.append(f"{did}: {len(prims)} prims, more than the {PRIM_MAX} allowed")
+    # The sheet's cap counts the mask's rect, so the file may carry one fewer.
+    if len(prims) + (1 if mask is not None else 0) > PRIM_MAX:
+        errors.append(
+            f"{did}: {len(prims) + (1 if mask is not None else 0)} prims, "
+            f"more than the {PRIM_MAX} allowed")
 
     out_prims = []
+    if mask_prim is not None:
+        colour, r = mask_prim
+        out_prims.append(struct.pack(
+            "<BBBBhhHHHhII", 0, 0, 0, 0, 0, 0, SPACE_W, SPACE_H, r, 0,
+            0xFFFFFFFF, colour))
     used_slots = set()
-    literals = []
     for i, prim in enumerate(prims, 1):
         tag = f"{did}: {_tag(prim, i)}"
         kind = prim.get("t")
-        # x and y are int16 in the sheet, w and h uint16: a value the record cannot hold is a
-        # refusal here, not a struct.error while packing
         x = _int(prim.get("x"), f"{tag}: x", errors, *COORD["x"])
         y = _int(prim.get("y"), f"{tag}: y", errors, *COORD["y"])
         w = _int(prim.get("w"), f"{tag}: w", errors, *COORD["w"])
         rot = _int(prim.get("rot", 0), f"{tag}: rot", errors, lo=-360, hi=360, default=0)
-        # A prim may sit outside the print: the print crops it, and the editor marks what will
-        # be cut (docs/specs/label-templates.md 1, ADR 0072). Position is not refused here; what
-        # the sheet cannot hold - an int16 coordinate, a uint16 size - is refused above.
         if kind == "rect":
             h = _int(prim.get("h"), f"{tag}: h", errors, *COORD["h"])
             r = _int(prim.get("r", 0), f"{tag}: r", errors, lo=0, default=0)
-            fill = prim.get("fill")
-            literal = 0
-            if fill in ROLE_INDEX:
-                fill_index = ROLE_INDEX[fill]
-                if fill.startswith("band.") and int(fill[5:]) >= band_declared:
-                    errors.append(f"{tag}: fill {fill} is past this design's {band_declared} bands")
-                if fill == "paper" and paper is None:
-                    errors.append(f"{tag}: fills with paper, and this design has no paper colour")
-            elif isinstance(fill, str) and HEX_RE.match(fill):
-                fill_index = FILL_LITERAL
-                literal = int(fill[1:], 16)
-                literals.append((tag, label.get("notes") or []))
-            else:
-                errors.append(f"{tag}: fill {fill!r} is not a role and not #RRGGBB")
-                fill_index = 0
+            colour = _hex(prim.get("fill"), f"{tag}: fill", errors)
             out_prims.append(struct.pack(
-                "<BBBBhhHHHhII", 0, fill_index, 0, 0, x, y, w, h, r,
-                round(rot * 10) % 3600, 0xFFFFFFFF, literal))
+                "<BBBBhhHHHhII", 0, 0, 0, 0, x, y, w, h, r,
+                round(rot * 10) % 3600, 0xFFFFFFFF, colour or 0))
             continue
 
         if kind != "text":
             errors.append(f"{tag}: t must be rect or text")
             continue
 
-        # A text prints in the ink or in one of the eight bands; the paper has nothing to read
-        # against it, and the one literal colour is a rect's (label-templates.md 2).
-        color = prim.get("color")
-        if color not in TEXT_ROLES:
-            errors.append(f"{tag}: colour {color!r} is not ink or a band")
-            fill_index = ROLE_INDEX["ink"]
-        else:
-            fill_index = ROLE_INDEX[color]
-            if color.startswith("band.") and int(color[5:]) >= band_declared:
-                errors.append(f"{tag}: colour {color} is past this design's {band_declared} bands")
+        colour = _hex(prim.get("color"), f"{tag}: colour", errors)
         role = prim.get("font")
         if role not in FONT_ROLES:
             errors.append(f"{tag}: font {role!r} is not title, numeral or caption")
@@ -477,16 +426,12 @@ def pack_design(design, font_index, pool):
             continue
 
         out_prims.append(struct.pack(
-            "<BBBBhhHHHhII", kind_index, fill_index, font, align, x, y, w, 0, 0,
-            round(rot * 10) % 3600, offset, 0))
+            "<BBBBhhHHHhII", kind_index, 0, font, align, x, y, w, 0, 0,
+            round(rot * 10) % 3600, offset, colour or 0))
 
     for name in slot_max:
         if name not in used_slots:
             errors.append(f'{did}: slot "{name}" is declared but no text uses it')
-    if len(literals) > 1:
-        errors.append(f"{did}: {len(literals)} layers use their own colour; a design may have one")
-    if len(literals) == 1 and not any(str(n).strip() for n in literals[0][1]):
-        errors.append(f"{did}: {literals[0][0]} uses its own colour and no note says why")
 
     if len(errors) > before:
         raise PackError(errors)
@@ -499,13 +444,9 @@ def pack_design(design, font_index, pool):
         "prim_count": len(out_prims),
         "slot_count": len(slot_records),
         "font": font_ids,
-        "inks": (paper or 0, ink, rule, *band),
         "canvas_count": len(canvas_colors),
         "canvases": canvas_colors,
     }
-    # The slot names travel back with the records, in the order they were packed, so the
-    # manifest below is derived from the same list the sheet is - not from the design's
-    # JSON key order, which is neither sorted nor what the reader will see.
     return fields, out_prims, slot_records, slot_names
 
 
@@ -578,13 +519,12 @@ def pack_sheet(designs, fonts):
              + PRIM_SIZE * len(prims) + SLOT_SIZE * len(slots) + len(pool_bytes))
     body = bytearray()
     for t in templates:
-        # 16 B of name/counts/fonts/canvas_count, the eleven role colours (paper, ink, rule,
-        # eight bands), then four reserved bytes: 64 B. The canvas list follows the templates.
+        # 16 B: name/counts/fonts/canvas_count. The literal colours are on the prims; the
+        # canvas list follows the templates (docs/specs/label-templates.md §3.2).
         body += struct.pack(
-            "<IHHHHBBBB11II",
+            "<IHHHHBBBB",
             t["name"], t["prim_start"], t["prim_count"], t["slot_start"], t["slot_count"],
-            t["font"][0], t["font"][1], t["font"][2], t["canvas_count"],
-            *t["inks"], 0)
+            t["font"][0], t["font"][1], t["font"][2], t["canvas_count"])
     for t in templates:
         for i in range(CANVAS_MAX):
             body += struct.pack("<I", t["canvases"][i] if i < t["canvas_count"] else 0)
@@ -635,11 +575,9 @@ def verify_sheet(blob):
     canvas_start = HEADER_SIZE + TEMPLATE_SIZE * templates
     for i in range(templates):
         (_, p_start, p_count, s_start, s_count, f0, f1, f2, canvas_count,
-         *rest) = struct.unpack_from("<IHHHHBBBB11II", blob, HEADER_SIZE + i * TEMPLATE_SIZE)
+         ) = struct.unpack_from("<IHHHHBBBB", blob, HEADER_SIZE + i * TEMPLATE_SIZE)
         if p_start + p_count > prims or s_start + s_count > slots:
             errors.append(f"template {i} runs past its arrays")
-        if rest[11] != 0:
-            errors.append(f"template {i}: the reserved word is not zero")
         if canvas_count > CANVAS_MAX:
             errors.append(f"template {i}: {canvas_count} canvases, more than {CANVAS_MAX}")
             continue
@@ -652,7 +590,7 @@ def verify_sheet(blob):
                 errors.append(f"template {i}: canvas {j} is past the design's {canvas_count}")
     for i in range(prims):
         off = canvas_start + CANVAS_MAX * 4 * templates + i * PRIM_SIZE
-        kind, fill, font, align, x, y, w, h, r, rot, text_off, _ = struct.unpack_from(
+        kind, reserved, font, align, x, y, w, h, r, rot, text_off, colour = struct.unpack_from(
             "<BBBBhhHHHhII", blob, off)
         if kind == 0 and text_off != 0xFFFFFFFF:
             errors.append(f"prim {i}: a rect carries a text offset")
@@ -661,8 +599,12 @@ def verify_sheet(blob):
                 errors.append(f"prim {i}: text offset {text_off} is outside the pool")
             elif blob.find(b"\0", pool_start + text_off) < 0:
                 errors.append(f"prim {i}: text is not NUL-terminated")
-        if fill > FILL_LITERAL or font > 2 or align > 2:
-            errors.append(f"prim {i}: kind/fill/font/align out of range")
+        if reserved != 0:
+            errors.append(f"prim {i}: the reserved byte is not zero")
+        if colour > 0xFFFFFF:
+            errors.append(f"prim {i}: colour {colour:#08x} is above RGB888")
+        if font > 2 or align > 2:
+            errors.append(f"prim {i}: kind/font/align out of range")
     if errors:
         raise PackError(errors)
     return (f"{templates} designs, {prims} prims, {slots} slots, {pool_size} B pool, "
@@ -795,16 +737,12 @@ def vocabulary_errors(v):
     otherwise reach the header and the page as a design nobody can pack.
     """
     errors = []
-    if v.get("v") != 1:
-        errors.append(f"{VOCABULARY}: v is {v.get('v')}, not 1")
+    if v.get("v") != 2:
+        errors.append(f"{VOCABULARY}: v is {v.get('v')}, not 2")
 
     space = v.get("space") or {}
     if not isinstance(space.get("w"), int) or not isinstance(space.get("h"), int):
         errors.append(f"{VOCABULARY}: space needs integer w and h")
-
-    bands = v.get("bands")
-    if not isinstance(bands, int) or not 4 <= bands <= 8:
-        errors.append(f"{VOCABULARY}: bands is {bands!r}; a design declares four to eight")
 
     if not isinstance(v.get("value"), int) or not 1 <= v["value"] <= 255:
         errors.append(f"{VOCABULARY}: value is {v.get('value')!r}, not 1..255")
@@ -899,7 +837,6 @@ def vocab_header(v):
         "",
         f"#define LABEL_SPACE_W       {v['space']['w']}u",
         f"#define LABEL_SPACE_H       {v['space']['h']}u",
-        f"#define LABEL_BAND_COUNT    {v['bands']}u",
         f"#define LABEL_VALUE_MAX     {v['value']}u",
         f"#define LABEL_CANVAS_MAX    {v['canvas']}u",
         f"#define LABEL_PRIM_MAX      {v['limits']['prims']}u",
@@ -945,7 +882,6 @@ def vocab_block(v):
         f"  space: {{ w: {sp['w']}, h: {sp['h']} }},",
         f"  aperture: {{ x: {ap['x']}, y: {ap['y']}, w: {ap['w']}, h: {ap['h']}, "
         f"r: {ap['r']} }},",
-        f"  bands: {v['bands']},",
         f"  value: {v['value']},",
         f"  canvas: {v['canvas']},",
         f"  limits: {{ prims: {lm['prims']}, slots: {lm['slots']}, "
@@ -1060,12 +996,10 @@ def selftest():
     fonts = [{"name": "Jura", "px": 20, "symbol": "jura_20"},
              {"name": "Archivo Narrow 600", "px": 32, "symbol": "archivo_narrow_600_32"}]
     good = {
-        "format": "k7art", "v": 1, "id": "k7.self", "name": "Self",
-        "inks": {"paper": "#F2EDE3", "ink": "#24211D", "rule": "#B9AC8E",
-                 "band": ["#C68B2E", "#A24E2C", "#8A5D34", "#6B7A2F",
-                          "#3B6E8F", "#7A3B52", "#B9AC8E", "#2F4B3A"]},
+        "format": "k7art", "v": 2, "id": "k7.self", "name": "Self",
         "label": {
             "space": {"w": 748, "h": 359},
+            "mask": {"color": "#F2EDE3", "r": 19},
             "aperture": {"x": 95, "y": 101, "w": 556, "h": 166, "r": 83},
             "canvas": {"backgrounds": ["#101010", "#F5F1E6"], "active": 1},
             "fonts": {"title": {"ff": "Archivo Narrow 600", "px": 32},
@@ -1073,31 +1007,29 @@ def selftest():
                       "caption": {"ff": "Jura", "px": 20}},
             "slots": {"song_title": {"max": 24}},
             "prims": [
-                {"t": "rect", "x": 0, "y": 0, "w": 748, "h": 359, "r": 19, "fill": "paper"},
                 {"t": "rect", "x": 0, "y": 300, "w": 40, "h": 20, "r": 0, "fill": "#C63A2E"},
                 {"t": "text", "slot": "song_title", "x": 32, "y": 280, "w": 400,
-                 "font": "title", "color": "ink", "align": "left", "preview": "Neon Skyline"},
+                 "font": "title", "color": "#24211D", "align": "left", "preview": "Neon Skyline"},
                 {"t": "text", "text": "SIDE A", "x": 32, "y": 20, "w": 200,
-                 "font": "caption", "color": "ink", "align": "right"},
+                 "font": "caption", "color": "#B9AC8E", "align": "right"},
             ],
-            "notes": ["the mark is the one literal colour"],
         },
         "jcard": {
             "space": {"w": 1300, "h": 1280, "unit": 320},
             "parts": {"flap": {"x": 0, "y": 0, "w": 320, "h": 1280},
                       "spine": {"x": 320, "y": 0, "w": 160, "h": 1280},
                       "cover": {"x": 480, "y": 0, "w": 820, "h": 1280}},
+            "background": "#F2EDE3",
             "fonts": {"title": {"ff": "Archivo Narrow 600", "size": 56},
                       "numeral": {"ff": "Barlow Condensed 700", "size": 136},
                       "caption": {"ff": "IBM Plex Mono 500", "size": 31}},
             "prims": [
-                {"t": "rect", "x": 0, "y": 0, "w": 1300, "h": 1280, "fill": "paper"},
                 {"t": "text", "slot": "title", "x": 540, "y": 900, "w": 700,
-                 "font": "numeral", "color": "ink", "align": "left", "preview": "Neon Skyline"},
+                 "font": "numeral", "color": "#24211D", "align": "left", "preview": "Neon Skyline"},
                 {"t": "text", "slot": "artist", "x": 540, "y": 1060, "w": 700,
-                 "font": "title", "color": "ink", "align": "left", "preview": "The Analog Sons"},
+                 "font": "title", "color": "#24211D", "align": "left", "preview": "The Analog Sons"},
                 {"t": "text", "slot": "meta", "x": 540, "y": 1120, "w": 700,
-                 "font": "caption", "color": "ink", "align": "left",
+                 "font": "caption", "color": "#24211D", "align": "left",
                  "preview": "Side A · Side B"},
             ],
         },
@@ -1116,33 +1048,36 @@ def selftest():
 
     blob, header, manifest = pack_sheet([good], fonts)
     summary = verify_sheet(blob)
+    # The mask's rect is synthesised in front of the design's prims.
     assert "1 designs, 4 prims, 1 slots" in summary, summary
     assert "LABEL_FONT_JURA_20 0" in header and "LABEL_FONT_COUNT 2" in header
-    # The J-card is the App's and never a byte of the sheet: its previews are not in the pool.
-    assert b"The Analog Sons" not in blob and b"Side A" not in blob, "a J-card entered the sheet"
     # The manifest is what t33 compares the opened sheet against, so its shape is part of
     # the packer's contract: index, prim count, slot count, the canvas list, the packed slot
     # names, the name.
     assert manifest == ("label_manifest\t3\ncount\t1\n"
                         "0\t4\t1\t#101010,#F5F1E6\tsong_title\tSelf\n"), repr(manifest)
-    # Version 4: the count is in the record, the list follows the templates.
-    fields = struct.unpack_from("<IHHHHBBBB11II", blob, HEADER_SIZE)
-    assert fields[8] == 2 and fields[-1] == 0, fields
+    # Version 5: a 16-byte template with no inks; the canvas list follows the templates.
+    fields = struct.unpack_from("<IHHHHBBBB", blob, HEADER_SIZE)
+    assert fields[8] == 2, fields
     canvas_at = HEADER_SIZE + TEMPLATE_SIZE
     assert struct.unpack_from("<II", blob, canvas_at) == (0x101010, 0xF5F1E6)
     assert struct.unpack_from("<II", blob, canvas_at + 8) == (0, 0)
+    # The mask's prim is the first; it paints the mask's colour and is a rect.
+    prim_at = canvas_at + CANVAS_MAX * 4
+    prim = struct.unpack_from("<BBBBhhHHHhII", blob, prim_at)
+    assert prim[0] == 0 and prim[1] == 0 and prim[11] == 0xF2EDE3, prim
     no_canvas = json.loads(json.dumps(good))
     del no_canvas["label"]["canvas"]
     bare, _, bare_manifest = pack_sheet([no_canvas], fonts)
     assert verify_sheet(bare)
-    fields = struct.unpack_from("<IHHHHBBBB11II", bare, HEADER_SIZE)
-    assert fields[8] == 0 and fields[-1] == 0, fields
+    fields = struct.unpack_from("<IHHHHBBBB", bare, HEADER_SIZE)
+    assert fields[8] == 0, fields
     assert struct.unpack_from("<II", bare, HEADER_SIZE + TEMPLATE_SIZE) == (0, 0)
     assert bare_manifest.endswith("0\t4\t1\t-\tsong_title\tSelf\n"), bare_manifest
 
     # the container is the identity: format, version and the k7.<slug> id are the file's
     expect_refusal(lambda d: d.update(format="label-template"), "format is 'label-template'")
-    expect_refusal(lambda d: d.update(v=2), "v is not 1")
+    expect_refusal(lambda d: d.update(v=1), "v is not 2")
     expect_refusal(lambda d: d.update(id="label.self"), "id must look like k7.my-name")
     expect_refusal(lambda d: d.update(name="  "), "no name")
     expect_refusal(lambda d: d.pop("label"), "no label")
@@ -1166,16 +1101,17 @@ def selftest():
     bleed = json.loads(json.dumps(good))
     bleed["label"]["prims"][0].update(x=400)
     pack_sheet([bleed], fonts)
-    expect_refusal(lambda d: d["label"]["prims"][2].update(font="numeral2"), "font 'numeral2'")
-    expect_refusal(lambda d: d["label"]["prims"][2].update(slot="year"),
+    expect_refusal(lambda d: d["label"]["prims"][1].update(font="numeral2"), "font 'numeral2'")
+    expect_refusal(lambda d: d["label"]["prims"][1].update(slot="year"),
                    "not a slot in the vocabulary")
     expect_refusal(lambda d: d["label"]["fonts"].update(title={"ff": "Nope", "px": 12}),
                    "does not carry")
-    expect_refusal(lambda d: d["label"].update(notes=[]), "no note says why")
-    expect_refusal(lambda d: d["label"]["prims"].append(
-        {"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4, "fill": "#111111"}), "may have one")
-    expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 3), "four to eight")
-    expect_refusal(lambda d: d["inks"].update(band=["#000000"] * 9), "four to eight")
+    # every element carries its colour: a role is not one, and neither is a broken hex
+    expect_refusal(lambda d: d["label"]["prims"][0].update(fill="band.0"), "fill")
+    expect_refusal(lambda d: d["label"]["prims"][1].update(color="ink"), "colour")
+    expect_refusal(lambda d: d["label"].update(mask={"color": "paper", "r": 10}), "mask.color")
+    expect_refusal(lambda d: d["label"].update(mask={"color": "#123456", "r": -1}), "mask.r")
+    expect_refusal(lambda d: d["label"].pop("mask"), "aperture without a mask")
     expect_refusal(lambda d: d["label"].update(canvas={"backgrounds": [], "active": 0}),
                    "canvas.backgrounds must be one to 8")
     expect_refusal(lambda d: d["label"].update(
@@ -1186,17 +1122,6 @@ def selftest():
     expect_refusal(lambda d: d["label"].update(canvas={"backgrounds": ["#101010"], "active": 2}),
                    "canvas.active 2")
 
-    # A design may keep four bands; a prim may not name a band it did not declare.
-    short = json.loads(json.dumps(good))
-    short["inks"]["band"] = short["inks"]["band"][:4]
-    short["label"]["prims"][0]["fill"] = "band.4"
-    try:
-        pack_sheet([short], fonts)
-        raise SystemExit("selftest: an undeclared band was accepted")
-    except PackError as exc:
-        if not any("past this design's 4 bands" in e for e in exc.errors):
-            raise SystemExit(f"selftest: expected the undeclared band, got {exc.errors}")
-
     # The J-card is checked against the pair's refusals and is never packed.
     expect_refusal(lambda d: d["jcard"].update(space={"w": 1200, "h": 1280, "unit": 320}),
                    "jcard space is (1200, 1280, 320), not 1300x1280 at 320 units per inch")
@@ -1206,28 +1131,22 @@ def selftest():
         back={"x": 0, "y": 0, "w": 10, "h": 10}), "jcard parts names back")
     expect_refusal(lambda d: d["jcard"]["fonts"]["title"].update(ff="Jura"), "not one of")
     expect_refusal(lambda d: d["jcard"]["fonts"]["title"].update(size=3), "outside 4..640")
+    expect_refusal(lambda d: d["jcard"].pop("background"), "jcard background")
     expect_refusal(lambda d: d["jcard"]["prims"][1].update(slot="year"),
                    '"year" is not a J-card field')
-    expect_refusal(lambda d: d["jcard"]["prims"][1].update(color="paper"),
-                   "paper has nothing to read against it")
-    expect_refusal(lambda d: d["jcard"]["prims"][0].update(fill="#C63A2E"), "literal colour")
+    expect_refusal(lambda d: d["jcard"]["prims"][1].update(color="ink"),
+                   "jcard prim 2: color")
     expect_refusal(lambda d: d["jcard"]["prims"][0].update(t="circle"), "t must be rect or text")
-
-    def jcard_band(d):
-        d["inks"]["band"] = d["inks"]["band"][:4]
-        d["jcard"]["prims"][0]["fill"] = "band.4"
-
-    expect_refusal(jcard_band, "jcard prim 1: fill band.4 is past this design's 4 bands")
     expect_refusal(lambda d: d["jcard"]["prims"][1].update(x=JCARD_BOUND + 1),
                    "outside -4096..4096")
     expect_refusal(lambda d: d["jcard"]["prims"][0].update(x=1, w=JCARD_BOUND),
                    "the box leaves the sheet's +/-4096 units")
     expect_refusal(lambda d: d["jcard"]["prims"].extend(
-        [{"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4, "fill": "ink"}] * 61),
+        [{"t": "rect", "x": 0, "y": 0, "w": 4, "h": 4, "fill": "#111111"}] * 62),
         "more than the 64 the App draws")
     expect_refusal(lambda d: d["jcard"]["prims"].append(
         {"t": "text", "text": "x" * JCARD_BYTES_MAX, "x": 0, "y": 0, "w": 100,
-         "font": "title", "color": "ink", "align": "left"}),
+         "font": "title", "color": "#111111", "align": "left"}),
         "over the 16384 the App bundles")
 
     # a folder is the set: every *.json in it is a K7Art, a stray file fails naming itself, the

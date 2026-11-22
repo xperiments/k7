@@ -141,7 +141,7 @@ export function JCardStage() {
     const multi = o !== sel && ed.selSet.has(o.id);
     const out = ed.outOfSpace(o);
     const isHover = hover === o.id && !selected && !multi;
-    const colour = ed.roleColor(o.role ?? "") ?? "transparent";
+    const colour = ed.fillOf(o);
     return (
       <div
         key={o.id}
@@ -264,7 +264,7 @@ export function JCardStage() {
                 width: JCARD_W * display,
                 height: JCARD_H * display,
                 outline: "1px solid var(--k7-line)",
-                background: ed.jcard.paper ?? ed.tpl.inks.paper,
+                background: ed.jcard.background,
                 cursor: ed.tool === "select" ? "default" : "crosshair",
               }}
             >
@@ -278,7 +278,7 @@ export function JCardStage() {
                     height: JCARD_H,
                     transform: `scale(${display})`,
                     transformOrigin: "0 0",
-                    background: ed.jcard.paper ?? ed.tpl.inks.paper,
+                    background: ed.jcard.background,
                   }}
                 >
                   {list.map((o, i) => layerEl(o, i))}

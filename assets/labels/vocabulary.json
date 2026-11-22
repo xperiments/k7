@@ -1,12 +1,11 @@
 {
   "_": "The label vocabulary: what a design may say, and the bounds the sheet and the panel hold it to. tools/label_pack.py reads this file and generates components/portable/label/include/label_vocab.h and the VOCAB block in tools/LabelEditor/src/engine/vocab.generated.ts, so the editor, the packer and the firmware cannot drift apart. docs/specs/label-templates.md is the contract; this is the table it names. Change it, then run `make -C host label`, which refuses a stale generated file.",
 
-  "v": 1,
+  "v": 2,
 
   "space": { "w": 748, "h": 359 },
   "aperture": { "x": 95, "y": 101, "w": 556, "h": 166, "r": 83 },
 
-  "bands": 8,
   "value": 96,
   "canvas": 8,
 

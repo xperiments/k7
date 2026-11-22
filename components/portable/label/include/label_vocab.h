@@ -11,7 +11,6 @@
 
 #define LABEL_SPACE_W       748u
 #define LABEL_SPACE_H       359u
-#define LABEL_BAND_COUNT    8u
 #define LABEL_VALUE_MAX     96u
 #define LABEL_CANVAS_MAX    8u
 #define LABEL_PRIM_MAX      48u

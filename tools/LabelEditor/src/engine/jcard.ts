@@ -1,7 +1,7 @@
 import { VOCAB } from "./vocab.generated";
-import { FROLES, ROLES, SLOTS, TEXT_ROLES } from "./vocab";
-import { DEFAULT_PAPER } from "./tpl";
-import type { FontRole, JCardDoc, JObj, Tpl } from "./types";
+import { DEFAULT_INK, FROLES, PAL, SLOTS, isColour } from "./vocab";
+import { DEFAULT_PAPER, roleColour, type Inks } from "./tpl";
+import type { FontRole, JCardDoc, JObj, Mask, Tpl } from "./types";
 
 /**
  * The J-card section of a K7Art (docs/specs/k7art.md §4): one printed side of a cassette
@@ -92,8 +92,8 @@ export const JCARD_BOUND = 4096;
 export interface JCardFile {
   space: { w: number; h: number; unit: number };
   parts: Record<JCardPart, { x: number; y: number; w: number; h: number }>;
-  /** The sheet's own colour; the label's paper is its own and does not move with this. */
-  paper: string;
+  /** The sheet's own colour, painted under the prims; independent of the label's mask. */
+  background: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: Array<Record<string, unknown>>;
 }
@@ -124,32 +124,29 @@ export function jcardFonts(tpl: Tpl): JCardDoc["fonts"] {
  * the editor's, not prims. The paper is the sheet's own colour: it starts at the label's
  * paper, and thereafter the two move independently.
  */
-export function starterJCard(tpl: Tpl): JCardDoc {
+export function starterJCard(tpl: Tpl, background: string = DEFAULT_PAPER): JCardDoc {
   const texts: Array<[JCardField, FontRole, number]> = [
     ["title", "numeral", 900],
     ["artist", "title", 1060],
     ["meta", "caption", 1120],
   ];
   return {
-    paper: tpl.inks.paper,
+    background: isColour(background) ? background : DEFAULT_PAPER,
     fonts: jcardFonts(tpl),
-    prims: [
-      { id: 1, type: "rect", name: "", x: 0, y: 0, w: JCARD_W, h: JCARD_H, role: "paper" },
-      ...texts.map(([field, fr, y], i) => ({
-        id: i + 2,
-        type: "text" as const,
-        name: field,
-        x: 540,
-        y,
-        w: 700,
-        fr,
-        role: "ink",
-        align: "left" as const,
-        sim: JCARD_SIMS[field],
-      })),
-    ],
+    prims: texts.map(([field, fr, y], i) => ({
+      id: i + 1,
+      type: "text" as const,
+      name: field,
+      x: 540,
+      y,
+      w: 700,
+      fr,
+      color: DEFAULT_INK,
+      align: "left" as const,
+      sim: JCARD_SIMS[field],
+    })),
     sims: { ...JCARD_SIMS },
-    nid: texts.length + 1,
+    nid: texts.length,
   };
 }
 
@@ -214,19 +211,16 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
       errs.push(`${tag}: its box leaves the sheet's +/-${JCARD_BOUND} units`);
 
     if (o.type === "text") {
-      const role = o.role ?? "";
-      if (!TEXT_ROLES.includes(role))
-        errs.push(
-          `${tag}: colour ${role ? `"${role}"` : "(none)"} is not ink or one of the eight bands; the paper has nothing to read against it`,
-        );
+      if (!isColour(o.color))
+        errs.push(`${tag}: colour ${JSON.stringify(o.color ?? null)} is not #RRGGBB`);
       if (!FROLES.includes(o.fr as FontRole))
-        errs.push(`${tag}: font role must be title, numeral or caption`);
+        errs.push(`${tag}: type role must be title, numeral or caption`);
       const pr: Record<string, unknown> = o.static
         ? { t: "text", x: X, y: Y, w: W }
         : { t: "text", slot: o.name || "", x: X, y: Y, w: W };
       if (o.rot !== undefined) pr.rot = Math.round(o.rot);
       pr.font = FROLES.includes(o.fr as FontRole) ? o.fr : "caption";
-      pr.color = TEXT_ROLES.includes(role) ? role : "ink";
+      pr.color = isColour(o.color) ? o.color : DEFAULT_INK;
       pr.align = o.align === "center" || o.align === "right" ? o.align : "left";
       if (o.static) {
         if (!(o.text || "").trim()) errs.push(`${tag}: static text is empty`);
@@ -255,16 +249,13 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
       return;
     }
 
-    const role = o.role ?? "";
-    if (role.startsWith("#"))
-      errs.push(`${tag}: fill ${role} is a literal colour; the J-card is role-coloured`);
-    else if (!ROLES.includes(role))
-      errs.push(`${tag}: fill ${role ? `"${role}"` : "(none)"} is not one of the container's inks`);
+    if (!isColour(o.color))
+      errs.push(`${tag}: fill ${JSON.stringify(o.color ?? null)} is not #RRGGBB`);
     const pr: Record<string, unknown> = { t: "rect", x: X, y: Y, w: W, h: Math.round(o.h || 0) };
     if (o.type === "circle") pr.r = Math.floor(Math.min(W, Math.round(o.h || 0)) / 2);
     else if (o.r !== undefined) pr.r = Math.round(o.r);
     if (o.rot !== undefined) pr.rot = Math.round(o.rot);
-    pr.fill = ROLES.includes(role) ? role : "paper";
+    pr.fill = isColour(o.color) ? o.color : PAL[0];
     prims.push(pr);
   });
 
@@ -275,7 +266,7 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
       spine: { ...JCARD_PARTS.spine },
       cover: { ...JCARD_PARTS.cover },
     },
-    paper: jcard.paper ?? DEFAULT_PAPER,
+    background: isColour(jcard.background) ? jcard.background : DEFAULT_PAPER,
     fonts,
     prims,
   };
@@ -288,28 +279,25 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
   return { doc, errs };
 }
 
-/** A J-card role that is one of the container's, or a paper a text cannot read against. */
-function readRole(
-  role: unknown,
-  allowPaper: boolean,
-  bandCount: number,
+/**
+ * A J-card prim's colour: its own `#RRGGBB`, or, reading a v1 file, the role it names in that
+ * file's inks. `paper` is the J-card section's own colour for a shape and refused for a text.
+ */
+function readColour(
+  value: unknown,
   what: string,
+  inks: Inks | null,
+  paper: string,
+  text: boolean,
 ): string {
-  if (typeof role !== "string")
-    throw new Error(`jcard: ${what} ${role === undefined ? "is missing" : "is not a role"}`);
-  if (role.startsWith("#"))
-    throw new Error(
-      `jcard: ${what} ${role} is a literal colour; the J-card is role-coloured`,
-    );
-  if (!ROLES.includes(role))
-    throw new Error(`jcard: ${what} "${role}" is not one of the container's inks`);
-  if (role === "paper" && !allowPaper)
-    throw new Error(
-      `jcard: ${what} paper has nothing to read against it`,
-    );
-  if (/^band\.[0-7]$/.test(role) && +role.slice(5) >= bandCount)
-    throw new Error(`jcard: ${what} ${role} is past this design's ${bandCount} bands`);
-  return role;
+  if (isColour(value)) return value;
+  if (inks && typeof value === "string") {
+    if (text && (value === "paper" || value === "rule"))
+      throw new Error(`jcard: ${what} ${value} has nothing to read against it`);
+    const c = roleColour(value, inks, paper);
+    if (c) return c;
+  }
+  throw new Error(`jcard: ${what} ${JSON.stringify(value ?? null)} is not #RRGGBB`);
 }
 
 function readPart(raw: unknown, part: JCardPart): void {
@@ -332,7 +320,7 @@ function readPart(raw: unknown, part: JCardPart): void {
  * Read a K7Art's `jcard` section into the editor's document. It throws what the packer and
  * the App would refuse, so Open is as strict as Export (docs/specs/k7art.md §7).
  */
-export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
+export function importJCard(raw: unknown, inks: Inks | null): JCardDoc {
   if (!isObject(raw)) throw new Error("jcard is missing -- the design is the pair");
 
   const space = raw.space;
@@ -381,7 +369,13 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
       `jcard: ${prims.length} prims, more than the ${JCARD_PRIM_MAX} the App draws`,
     );
 
-  const bandCount = Array.isArray(tpl.inks.band) ? tpl.inks.band.length : 0;
+  const background = isColour(raw.background)
+    ? raw.background
+    : isColour(raw.paper)
+      ? raw.paper
+      : inks?.paper;
+  if (!isColour(background))
+    throw new Error(`jcard: background ${JSON.stringify(raw.background ?? raw.paper ?? null)} is not #RRGGBB`);
   const out: JObj[] = [];
   const sims: Record<string, string> = { ...JCARD_SIMS };
   prims.forEach((prim, i) => {
@@ -425,7 +419,7 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
           throw new Error(`jcard prim ${i + 1}: r must be zero or more units`);
         o.r = prim.r;
       }
-      o.role = readRole(prim.fill, true, bandCount, `prim ${i + 1}: fill`);
+      o.color = readColour(prim.fill, `prim ${i + 1}: fill`, inks, background, false);
     } else {
       const font = prim.font;
       if (!FROLES.includes(font as FontRole))
@@ -439,7 +433,7 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
           `jcard prim ${i + 1}: align ${JSON.stringify(align)} is not left, center or right`,
         );
       o.align = align as JObj["align"];
-      o.role = readRole(prim.color ?? "ink", false, bandCount, `prim ${i + 1}: color`);
+      o.color = readColour(prim.color, `prim ${i + 1}: color`, inks, background, true);
       if ("slot" in prim) {
         const field = prim.slot;
         if (!JCARD_FIELDS.includes(field as JCardField))
@@ -474,7 +468,7 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
     );
 
   return {
-    paper: typeof raw.paper === "string" ? raw.paper : tpl.inks.paper,
+    background,
     fonts,
     prims: out,
     nid: Math.max(0, ...out.map((o) => o.id)),
@@ -490,11 +484,17 @@ export function importJCard(raw: unknown, tpl: Tpl): JCardDoc {
 export function migrateJCard(
   jcard: JCardDoc | null | undefined,
   tpl: Tpl,
+  inks: Inks | null,
+  mask: Mask | null,
 ): JCardDoc {
-  const starter = starterJCard(tpl);
+  const starter = starterJCard(tpl, mask?.color);
   if (!isObject(jcard)) return starter;
   const doc = jcard as unknown as Record<string, unknown>;
-  const paper = typeof doc.paper === "string" ? doc.paper : starter.paper;
+  const background = isColour(doc.background)
+    ? doc.background
+    : isColour(doc.paper)
+      ? (doc.paper as string)
+      : starter.background;
 
   const fonts = {} as JCardDoc["fonts"];
   const rawFonts = (isObject(doc.fonts) ? doc.fonts : {}) as Record<string, unknown>;
@@ -516,7 +516,17 @@ export function migrateJCard(
   const prims: JObj[] = [];
   raw.forEach((p, i) => {
     if (!isObject(p)) return;
-    prims.push({ ...(p as unknown as JObj), id: isInt(p.id) ? p.id : i + 1 });
+    const o = { ...(p as unknown as JObj), id: isInt(p.id) ? p.id : i + 1 };
+    // A v1 layer names a role; resolve it through the document's own inks. A v2 layer already
+    // carries its colour.
+    const role = (p as { role?: unknown }).role;
+    if (inks && typeof role === "string") {
+      const c = roleColour(role, inks, o.type === "text" ? undefined : background);
+      if (c) o.color = c;
+    }
+    delete (o as { role?: unknown }).role;
+    if (!isColour(o.color)) o.color = o.type === "text" ? DEFAULT_INK : background;
+    prims.push(o);
   });
   // A document stored before the Fields panel carried its own values keeps each field's
   // first text preview; the starter's own words fill the rest.
@@ -526,6 +536,6 @@ export function migrateJCard(
       if (!o.static && o.name && o.sim !== undefined && o.sim !== "") sims[o.name] = o.sim;
     });
   }
-  if (!prims.length) return { ...starter, paper, fonts, sims };
-  return { paper, fonts, prims, sims, nid: Math.max(0, ...prims.map((o) => o.id)) };
+  if (!prims.length) return { ...starter, background, fonts, sims };
+  return { background, fonts, prims, sims, nid: Math.max(0, ...prims.map((o) => o.id)) };
 }

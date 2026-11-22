@@ -71,32 +71,14 @@ export type JcardFace = (typeof JCARD_FACES)[number];
 export const JCARD_FONT_ROLES = ['title', 'numeral', 'caption'] as const;
 export type JcardFontRole = (typeof JCARD_FONT_ROLES)[number];
 
-/** The container's eleven colour roles (k7art.md §2). */
-export const JCARD_ROLES = [
-  'paper',
-  'ink',
-  'rule',
-  'band.0',
-  'band.1',
-  'band.2',
-  'band.3',
-  'band.4',
-  'band.5',
-  'band.6',
-  'band.7',
-] as const;
-export type JcardRole = (typeof JCARD_ROLES)[number];
-
 export const JCARD_SIZE_MIN = 4;
 export const JCARD_SIZE_MAX = 640;
 export const JCARD_PRIM_MAX = 64;
 export const JCARD_BOUND = 4096;
 
-export interface JcardInks {
-  paper: string;
-  ink: string;
-  rule: string;
-  band: string[];
+/** Every colour is the prim's own, a literal `#RRGGBB` (k7art.md §2). */
+export function isJcardColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 }
 
 export interface JcardFont {
@@ -112,7 +94,8 @@ export interface JcardRect {
   h: number;
   r?: number;
   rot?: number;
-  fill: JcardRole;
+  /** The shape's own colour, `#RRGGBB`. */
+  fill: string;
 }
 
 export interface JcardText {
@@ -122,7 +105,8 @@ export interface JcardText {
   w: number;
   rot?: number;
   font: JcardFontRole;
-  color: Exclude<JcardRole, 'paper' | 'rule'>;
+  /** The text's own colour, `#RRGGBB`. */
+  color: string;
   align: 'left' | 'center' | 'right';
   slot?: JcardField;
   text?: string;
@@ -132,8 +116,8 @@ export type JcardPrim = JcardRect | JcardText;
 
 export interface JcardSection {
   space: { w: number; h: number; unit: number };
-  /** The sheet's own colour; the design's inks are the label's and do not move with it. */
-  paper: string;
+  /** The sheet's own colour, `#RRGGBB`; painted under the prims. */
+  background: string;
   fonts: Record<JcardFontRole, JcardFont>;
   prims: JcardPrim[];
 }
@@ -145,7 +129,6 @@ export interface JcardSection {
 export interface JcardDesign {
   id: string;
   name: string;
-  inks: JcardInks;
   jcard: JcardSection;
 }
 
@@ -157,46 +140,8 @@ const isInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value);
 const isString = (value: unknown): value is string => typeof value === 'string';
 
-function isRole(value: unknown): value is JcardRole {
-  return typeof value === 'string' && (JCARD_ROLES as readonly string[]).includes(value);
-}
-
-function isTextColor(
-  value: unknown,
-): value is Exclude<JcardRole, 'paper' | 'rule'> {
-  return (
-    value === 'ink' ||
-    (typeof value === 'string' && /^band\.[0-7]$/.test(value))
-  );
-}
-
 function isField(value: unknown): value is JcardField {
   return typeof value === 'string' && (JCARD_FIELDS as readonly string[]).includes(value);
-}
-
-/** A fill names one of the container's inks, and a band must exist in this design's palette. */
-function readsFill(value: unknown, bandCount: number): value is JcardRole {
-  if (!isRole(value)) return false;
-  if (!value.startsWith('band.')) return true;
-  return Number(value.slice(5)) < bandCount;
-}
-
-/** A text prints in the ink or a band; the paper has nothing to read against it. */
-function readsTextColor(
-  value: unknown,
-  bandCount: number,
-): value is Exclude<JcardRole, 'paper' | 'rule'> {
-  if (!isTextColor(value)) return false;
-  if (!value.startsWith('band.')) return true;
-  return Number(value.slice(5)) < bandCount;
-}
-
-function readsInks(raw: unknown): JcardInks | null {
-  if (!isObject(raw)) return null;
-  const { paper, ink, rule, band } = raw;
-  if (!isString(paper) || !isString(ink) || !isString(rule)) return null;
-  if (!Array.isArray(band) || band.length === 0 || !band.every(isString)) return null;
-  return { paper, ink, rule, band: band.slice(0, 8) };
 }
 
 /**
@@ -204,7 +149,7 @@ function readsInks(raw: unknown): JcardInks | null {
  * is dropped, and the design's other layers still make its face. The section is the one
  * refused whole by {@link readJcardDesign} when its sheet, parts or fonts are not the case's.
  */
-function readPrim(raw: unknown, bandCount: number): JcardPrim | null {
+function readPrim(raw: unknown): JcardPrim | null {
   if (!isObject(raw)) return null;
 
   const { x, y, w, rot: rawRot } = raw;
@@ -217,7 +162,7 @@ function readPrim(raw: unknown, bandCount: number): JcardPrim | null {
     const { h, r: rawR, fill } = raw;
     if (!isNumber(h) || h <= 0 || h > JCARD_BOUND) return null;
     if (y + h > JCARD_BOUND) return null;
-    if (!readsFill(fill, bandCount)) return null;
+    if (!isJcardColor(fill)) return null;
     const r = isNumber(rawR) && rawR >= 0 ? rawR : undefined;
     return {
       t: 'rect',
@@ -238,8 +183,9 @@ function readPrim(raw: unknown, bandCount: number): JcardPrim | null {
     }
     // A text has no declared height; the sheet's bottom is the only bound it can leave.
     if (y > JCARD_BOUND) return null;
-    const color = raw.color ?? 'ink';
-    if (!readsTextColor(color, bandCount)) return null;
+    /* A text prints in its own colour; a missing one is not defaulted to an ink any more. */
+    const color = raw.color;
+    if (!isJcardColor(color)) return null;
     const rawAlign = raw.align ?? 'left';
     const align: JcardText['align'] =
       rawAlign === 'center' || rawAlign === 'right' ? rawAlign : 'left';
@@ -312,20 +258,18 @@ function readsFonts(raw: unknown): Record<JcardFontRole, JcardFont> | null {
 }
 
 /**
- * A K7Art, or one design from a pack's J-cards, as the renderer needs it. The container's
- * `format`/`v` are refused when present and wrong; a pack entry has neither (art-packs.md §1).
+ * A K7Art, or one design from a pack's J-cards, as the renderer needs it. The App reads v2;
+ * a v1 design is refused here, and the factory's three-field import carries no `v` at all
+ * (k7art.md §1, art-packs.md §1).
  */
 export function readJcardDesign(raw: unknown): JcardDesign | null {
   if (!isObject(raw)) return null;
   if ('format' in raw && raw.format !== 'k7art') return null;
-  if ('v' in raw && raw.v !== 1) return null;
+  if ('v' in raw && raw.v !== 2) return null;
 
   const id = raw.id;
   if (!isString(id) || !/^k7\.[a-z0-9][a-z0-9-]*$/.test(id)) return null;
   const name = isString(raw.name) && raw.name.trim() ? raw.name : id;
-
-  const inks = readsInks(raw.inks);
-  if (!inks) return null;
 
   const jcard = raw.jcard;
   if (!isObject(jcard)) return null;
@@ -335,27 +279,29 @@ export function readJcardDesign(raw: unknown): JcardDesign | null {
   const fonts = readsFonts(jcard.fonts);
   if (!fonts) return null;
   if (!Array.isArray(jcard.prims) || jcard.prims.length > JCARD_PRIM_MAX) return null;
-  const paper = isString(jcard.paper) ? jcard.paper : inks.paper;
+  /* The sheet is painted in its own background; there is no inks palette to fall back to. */
+  const background = jcard.background;
+  if (!isJcardColor(background)) return null;
 
   const prims: JcardPrim[] = [];
   for (const prim of jcard.prims) {
-    const read = readPrim(prim, inks.band.length);
+    const read = readPrim(prim);
     if (read) prims.push(read);
   }
 
-  return { id, name, inks, jcard: { space, paper, fonts, prims } };
+  return { id, name, jcard: { space, background, fonts, prims } };
 }
 
 /**
- * The J-cards of a `.k7artpack` (art-packs.md §1): its `{ v, designs }` object, or the design
- * list alone. Every design the renderer can draw is kept; a bad one is left out rather than
- * taking the good ones with it. The pack's header and CRC are the install's (APP-65).
+ * The J-cards of a `.k7artpack` (art-packs.md §1): its `{ v: 2, designs }` object, or the
+ * design list alone. Every design the renderer can draw is kept; a bad one is left out rather
+ * than taking the good ones with it. The pack's header and CRC are the install's (APP-65).
  */
 export function readJcardPack(raw: unknown): JcardDesign[] | null {
   let list: unknown[] | null = null;
   if (Array.isArray(raw)) list = raw;
   else if (isObject(raw) && Array.isArray(raw.designs)) {
-    if ('v' in raw && raw.v !== 1) return null;
+    if ('v' in raw && raw.v !== 2) return null;
     list = raw.designs;
   }
   if (!list) return null;

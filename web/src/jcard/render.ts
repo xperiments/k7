@@ -4,18 +4,18 @@ import {
   JCARD_HEIGHT,
   JCARD_PARTS,
   JCARD_WIDTH,
+  isJcardColor,
   type JcardDesign,
   type JcardFields,
   type JcardPart,
   type JcardPrim,
-  type JcardRole,
 } from './model';
 
 /**
  * The J-card as a surface, without React: given a design, the three words and the panel the
  * surface shows, return the sheet's geometry and one node per prim. Keeping the geometry
  * here (and not in the component) is what lets the renderer be tested in the App's node
- * environment: roles, sizes, rotation, wrap and the two clips are asserted on these values.
+ * environment: colours, sizes, rotation, wrap and the two clips are asserted on these values.
  *
  * The sheet is always the whole 1300x1280 design; the surface clips it to the panel. Every
  * length a prim uses is a share of the sheet's width, so a size of 56 is 56/1300 of the
@@ -57,18 +57,9 @@ const FACE_CSS: Record<string, { family: string; weight: number }> = {
   },
 };
 
-/** The role's colour: the sheet's own paper, or one of the design's inks. */
-export function roleColor(
-  inks: JcardDesign['inks'],
-  paper: string,
-  role: JcardRole,
-): string | null {
-  if (role === 'paper') return paper;
-  if (role === 'ink') return inks.ink;
-  if (role === 'rule') return inks.rule;
-  const band = /^band\.([0-7])$/.exec(role);
-  if (!band) return null;
-  return inks.band[Number(band[1])] ?? null;
+/** The prim's own colour; a missing or malformed one paints nothing. */
+function paint(color: unknown): string {
+  return isJcardColor(color) ? color : 'transparent';
 }
 
 function rotate(prim: JcardPrim): CSSProperties {
@@ -78,11 +69,9 @@ function rotate(prim: JcardPrim): CSSProperties {
 
 function rectNode(
   prim: Extract<JcardPrim, { t: 'rect' }>,
-  design: JcardDesign,
   viewWidth: number,
   key: string,
 ): JcardNode {
-  const color = roleColor(design.inks, design.jcard.paper, prim.fill) ?? 'transparent';
   return {
     key,
     kind: 'rect',
@@ -91,7 +80,7 @@ function rectNode(
       top: `${(prim.y / JCARD_HEIGHT) * 100}%`,
       width: `${(prim.w / JCARD_WIDTH) * 100}%`,
       height: `${(prim.h / JCARD_HEIGHT) * 100}%`,
-      background: color,
+      background: paint(prim.fill),
       ...(prim.r === undefined
         ? {}
         : { borderRadius: `${(prim.r / viewWidth) * 100}cqi` }),
@@ -121,7 +110,7 @@ function textNode(
    * as a share of the sheet.
    */
   const lines = Math.max(1, Math.floor((JCARD_HEIGHT - prim.y) / (font.size * LINE_HEIGHT)));
-  const color = roleColor(design.inks, design.jcard.paper, prim.color) ?? design.inks.ink;
+  const color = paint(prim.color);
 
   return {
     key,
@@ -191,7 +180,7 @@ export function jcardFrame(
 
   const nodes = design.jcard.prims.map((prim, index) =>
     prim.t === 'rect'
-      ? rectNode(prim, design, view.w, `${index}:rect`)
+      ? rectNode(prim, view.w, `${index}:rect`)
       : textNode(prim, design, fields, view.w, `${index}:text`),
   );
 
@@ -202,10 +191,10 @@ export function jcardFrame(
       top,
       width,
       height,
-      /* The sheet is paper, and its colour is the design's own: the case's face under it is
-       * the chrome's orange, so a design that does not lay a `paper` rect over the sheet
-       * used to show the moulding through it. */
-      background: design.jcard.paper,
+      /* The sheet is painted with its own background: the case's face under it is the
+       * chrome's orange, so a design with no full-sheet rect used to show the moulding
+       * through it. */
+      background: paint(design.jcard.background),
     },
     nodes,
   };

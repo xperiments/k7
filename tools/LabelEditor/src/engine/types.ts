@@ -22,15 +22,15 @@ export interface Obj {
   sim?: string;
   /** A static text: no Slot, the string is the design. */
   static?: boolean;
-  /** The colour role the prim prints in; the colourway lives on the template. */
-  role?: string;
+  /** The layer's own colour, `#RRGGBB`: a shape's fill or a text's type. */
+  color?: string;
   fr?: FontRole;
   align?: "left" | "center" | "right";
   r?: number;
   rot?: number;
-  /** Pre-role documents carry a literal colour; moved to a role on load. */
-  color?: string;
+  /** A retired text colour, read only by the v1 migration. */
   tc?: string;
+  /** Retired type fields, read only by the v1 migration. */
   ff?: string;
   font?: number;
   s?: number;
@@ -74,8 +74,8 @@ export interface CanvasDoc {
 export interface JObj {
   id: number;
   type: ObjType;
-  /** The colour role a shape fills or a text prints in: the container's inks, never a literal. */
-  role?: string;
+  /** The layer's own colour, `#RRGGBB`: a shape's fill or a text's type. */
+  color?: string;
   /** The J-card type role. */
   fr?: FontRole;
   align?: "left" | "center" | "right";
@@ -107,8 +107,8 @@ export interface JObj {
  * carries each text's `preview`, which the panel writes through.
  */
 export interface JCardDoc {
-  /** The sheet's own colour: independent of the label's paper, so one does not move the other. */
-  paper: string;
+  /** The sheet's own colour, painted under the prims; independent of the label's mask. */
+  background: string;
   fonts: Record<FontRole, { ff: string; size: number }>;
   prims: JObj[];
   nid: number;
@@ -124,11 +124,6 @@ export type JCardFocus = "sheet" | "flap" | "spine" | "cover";
 export interface Tpl {
   id: string;
   name: string;
-  /**
-   * The container's eleven roles. The paper is the LayerMask's colour when the label has a
-   * mask and the J-card's sheet either way, so it is always a colour here.
-   */
-  inks: { paper: string; ink: string; band: string[]; rule: string };
   fonts: Record<FontRole, { ff: string; px: number }>;
   slots: Record<string, { max: number }>;
   sim: Record<string, string>;

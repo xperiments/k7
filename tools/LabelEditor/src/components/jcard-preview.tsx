@@ -15,10 +15,9 @@ export function JCardPreview() {
   const design = {
     id: ed.tpl.id,
     name: ed.tpl.name,
-    inks: ed.tpl.inks,
     jcard: {
       space: built.doc.space,
-      paper: built.doc.paper,
+      background: built.doc.background,
       fonts: built.doc.fonts,
       prims: built.doc.prims,
     } as unknown as JcardSection,

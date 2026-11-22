@@ -88,7 +88,7 @@ static uint8_t *build_sheet(const char *name, uint16_t templates, size_t *n_out)
     tbuf_t b = {0};
     const size_t pool = strlen(name) + 1;
     put(&b, "K7LBL\0\0\0", 8);
-    put16(&b, 4);
+    put16(&b, LABEL_VERSION);
     put16(&b, 32);
     put32(&b, 0); /* total, patched */
     put32(&b, 0); /* crc, patched */
@@ -109,20 +109,15 @@ static uint8_t *build_sheet(const char *name, uint16_t templates, size_t *n_out)
         put8(&b, 0);       /* numeral font */
         put8(&b, 0);       /* caption font */
         put8(&b, 0);       /* no canvas */
-        put32(&b, 0xF2EDE3); /* paper */
-        put32(&b, 0x24211D); /* ink */
-        put32(&b, 0xB9AC8E); /* rule */
-        for (int i = 0; i < 8; i++) put32(&b, 0); /* bands */
-        put32(&b, 0);      /* reserved */
     }
     for (uint16_t t = 0; t < templates; t++)
         for (int i = 0; i < 8; i++) put32(&b, 0); /* the canvas rows */
 
     for (uint16_t t = 0; t < templates; t++) {
         put8(&b, LABEL_RECT);
-        put8(&b, LABEL_FILL_PAPER);
-        put8(&b, 0);
-        put8(&b, 0);
+        put8(&b, 0);          /* reserved */
+        put8(&b, 0);          /* font */
+        put8(&b, 0);          /* align */
         put16(&b, 0);
         put16(&b, 0);
         put16(&b, 748);
@@ -130,7 +125,7 @@ static uint8_t *build_sheet(const char *name, uint16_t templates, size_t *n_out)
         put16(&b, 19);
         put16(&b, 0);
         put32(&b, 0xFFFFFFFFu);
-        put32(&b, 0);
+        put32(&b, 0xF2EDE3);  /* the paper's own colour */
     }
     put(&b, name, pool);
 
@@ -296,7 +291,7 @@ static void test_pack(const uint8_t *sheet, size_t sheet_len)
         CHECK(refuses(p, n, 2, "design_count disagrees"), "a count the sheet does not have is refused");
         free(p);
         p = mutate_pack(pack, n, 22, 3, 2);
-        CHECK(refuses(p, n, 2, "not sheet version 4"), "a sheet from another version is refused");
+        CHECK(refuses(p, n, 2, "not sheet version 5"), "a sheet from another version is refused");
         free(p);
         p = mutate_pack(pack, n, 24, 0, 2);
         CHECK(refuses(p, n, 2, "no font table"), "a pack with no font table is refused");

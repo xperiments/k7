@@ -5,7 +5,6 @@
 export const VOCAB = {
   space: { w: 748, h: 359 },
   aperture: { x: 95, y: 101, w: 556, h: 166, r: 83 },
-  bands: 8,
   value: 96,
   canvas: 8,
   limits: { prims: 48, slots: 16, templates: 32 },

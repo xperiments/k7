@@ -91,11 +91,11 @@ static void patch32(uint8_t *p, size_t at, uint32_t v)
 
 /* ------------------------------------------------------------ sheet builder */
 
-#define T_AT(t)        (32u + 64u * (size_t)(t))
-#define CANVAS_AT(t, i) (32u + 64u * 2u + 32u * (size_t)(t) + 4u * (size_t)(i))
-#define P_AT(i)        (32u + 64u * 2u + 32u * 2u + 24u * (size_t)(i))
-#define S_AT(i)        (32u + 64u * 2u + 32u * 2u + 24u * 5u + 8u * (size_t)(i))
-#define POOL_AT         (32u + 64u * 2u + 32u * 2u + 24u * 5u + 8u * 2u)
+#define T_AT(t)        (32u + 16u * (size_t)(t))
+#define CANVAS_AT(t, i) (32u + 16u * 2u + 32u * (size_t)(t) + 4u * (size_t)(i))
+#define P_AT(i)        (32u + 16u * 2u + 32u * 2u + 24u * (size_t)(i))
+#define S_AT(i)        (32u + 16u * 2u + 32u * 2u + 24u * 5u + 8u * (size_t)(i))
+#define POOL_AT         (32u + 16u * 2u + 32u * 2u + 24u * 5u + 8u * 2u)
 
 enum {
     POOL_NIGHT = 0,
@@ -109,13 +109,14 @@ enum {
 static const char k_pool[POOL_N] =
     "Night Drive\0Second\0SIDE A\0song_title\0bpm\0";
 
-/* One prim record, as the test writes it. */
-static void put_prim(tbuf_t *b, uint8_t kind, uint8_t fill, uint8_t font, uint8_t align,
+/* One prim record, as the test writes it. The second byte is the record's reserved byte,
+ * which the writer must leave 0; `colour` is the prim's own RGB888 paint. */
+static void put_prim(tbuf_t *b, uint8_t kind, uint8_t reserved, uint8_t font, uint8_t align,
                      int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t r, int16_t rot10,
-                     uint32_t text, uint32_t literal)
+                     uint32_t text, uint32_t colour)
 {
     put8(b, kind);
-    put8(b, fill);
+    put8(b, reserved);
     put8(b, font);
     put8(b, align);
     put16(b, (uint16_t)x);
@@ -125,7 +126,7 @@ static void put_prim(tbuf_t *b, uint8_t kind, uint8_t fill, uint8_t font, uint8_
     put16(b, r);
     put16(b, (uint16_t)rot10);
     put32(b, text);
-    put32(b, literal);
+    put32(b, colour);
 }
 
 static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t prim_count,
@@ -141,18 +142,6 @@ static void put_template(tbuf_t *b, uint32_t name, uint16_t prim_start, uint16_t
     put8(b, f1);
     put8(b, f2);
     put8(b, canvas_count);
-    put32(b, 0xF2EDE3);      /* paper */
-    put32(b, 0x24211D);      /* ink */
-    put32(b, 0xB9AC8E);      /* rule */
-    put32(b, 0xC68B2E);      /* band 0 */
-    put32(b, 0xA24E2C);      /* band 1 */
-    put32(b, 0x8A5D34);      /* band 2 */
-    put32(b, 0x6B7A2F);      /* band 3 */
-    put32(b, 0x3B6E8F);      /* band 4 */
-    put32(b, 0x7A3B52);      /* band 5 */
-    put32(b, 0xB9AC8E);      /* band 6 */
-    put32(b, 0x2F4B3A);      /* band 7 */
-    put32(b, 0);             /* reserved */
 }
 
 /* The canonical sheet: two designs, five prims, two slots, one shared pool. Its header's
@@ -161,7 +150,7 @@ static uint8_t *build_sheet(size_t *n_out)
 {
     tbuf_t b = {0};
     put(&b, "K7LBL\0\0\0", 8);
-    put16(&b, 4);              /* version */
+    put16(&b, 5);              /* version */
     put16(&b, 32);             /* header size */
     put32(&b, 0);              /* total, patched */
     put32(&b, 0);              /* crc, patched */
@@ -180,14 +169,13 @@ static uint8_t *build_sheet(size_t *n_out)
     for (int i = 1; i < 8; i++) put32(&b, 0);
     for (int i = 0; i < 8; i++) put32(&b, 0);
 
-    put_prim(&b, LABEL_RECT, LABEL_FILL_PAPER, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0);
-    put_prim(&b, LABEL_RECT, LABEL_FILL_LITERAL, 0, 0, 700, 292, 20, 20, 3, 0, 0xFFFFFFFFu,
-             0xC63A2E);
-    put_prim(&b, LABEL_TEXT_STATIC, LABEL_FILL_INK, LABEL_FONT_CAPTION, LABEL_ALIGN_RIGHT,
-             32, 20, 200, 0, 0, 0, POOL_SIDE, 0);
-    put_prim(&b, LABEL_TEXT_SLOT, LABEL_FILL_INK, LABEL_FONT_TITLE, LABEL_ALIGN_LEFT,
-             32, 282, 400, 0, 0, 900, POOL_SONG, 0);
-    put_prim(&b, LABEL_RECT, LABEL_FILL_INK, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0);
+    put_prim(&b, LABEL_RECT, 0, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0xF2EDE3);
+    put_prim(&b, LABEL_RECT, 0, 0, 0, 700, 292, 20, 20, 3, 0, 0xFFFFFFFFu, 0xC63A2E);
+    put_prim(&b, LABEL_TEXT_STATIC, 0, LABEL_FONT_CAPTION, LABEL_ALIGN_RIGHT,
+             32, 20, 200, 0, 0, 0, POOL_SIDE, 0x24211D);
+    put_prim(&b, LABEL_TEXT_SLOT, 0, LABEL_FONT_TITLE, LABEL_ALIGN_LEFT,
+             32, 282, 400, 0, 0, 900, POOL_SONG, 0x24211D);
+    put_prim(&b, LABEL_RECT, 0, 0, 0, 0, 0, 748, 359, 19, 0, 0xFFFFFFFFu, 0x24211D);
 
     put32(&b, POOL_SONG);      /* slot 0: song_title */
     put8(&b, 24);
@@ -263,19 +251,19 @@ static void test_reader(void)
     label_prim_t p;
     CHECK(label_prim_at(s, 0, 0, &p), "prim 0");
     CHECK_EQ(p.kind, LABEL_RECT, "prim 0 is a rect");
-    CHECK_EQ(p.fill, LABEL_FILL_PAPER, "prim 0 fills with paper");
+    CHECK_EQ(p.colour, 0xF2EDE3, "prim 0 paints its own colour");
     CHECK_EQ(p.w, 748, "prim 0 width");
     CHECK_EQ(p.h, 359, "prim 0 height");
     CHECK_EQ(p.r, 19, "prim 0 radius");
 
     CHECK(label_prim_at(s, 0, 1, &p), "prim 1");
-    CHECK_EQ(p.fill, LABEL_FILL_LITERAL, "prim 1 is the literal colour");
-    CHECK_EQ(p.literal, 0xC63A2E, "prim 1's colour");
+    CHECK_EQ(p.colour, 0xC63A2E, "prim 1's colour");
 
     CHECK(label_prim_at(s, 0, 2, &p), "prim 2");
     CHECK_EQ(p.kind, LABEL_TEXT_STATIC, "prim 2 is a static text");
     CHECK_EQ(p.font, LABEL_FONT_CAPTION, "prim 2's face");
     CHECK_EQ(p.align, LABEL_ALIGN_RIGHT, "prim 2's alignment");
+    CHECK_EQ(p.colour, 0x24211D, "prim 2's colour");
     CHECK(strcmp(label_prim_text(s, 0, 2), "SIDE A") == 0, "prim 2's text");
 
     CHECK(label_prim_at(s, 0, 3, &p), "prim 3");
@@ -298,14 +286,6 @@ static void test_reader(void)
     CHECK(strcmp(slot.name, "bpm") == 0, "slot 1's name");
     CHECK_EQ(slot.max, 3, "slot 1's max");
     CHECK(!label_slot_at(s, 0, 2, &slot), "slot past the template");
-
-    label_inks_t inks = label_inks(s, 0);
-    CHECK_EQ(inks.paper, 0xF2EDE3, "paper");
-    CHECK_EQ(inks.ink, 0x24211D, "ink");
-    CHECK_EQ(inks.rule, 0xB9AC8E, "rule");
-    CHECK_EQ(inks.band[0], 0xC68B2E, "band 0");
-    CHECK_EQ(inks.band[3], 0x6B7A2F, "band 3");
-    CHECK_EQ(inks.band[7], 0x2F4B3A, "band 7");
 
     CHECK_EQ(label_font(s, 0, LABEL_FONT_TITLE), 0, "title face");
     CHECK_EQ(label_font(s, 0, LABEL_FONT_NUMERAL), 1, "numeral face");
@@ -338,7 +318,7 @@ static void test_refusals(void)
     free(b);
 
     b = mutate(8, 1, 2, &n);
-    CHECK(refuses(b, n, "version 4"), "version 1");
+    CHECK(refuses(b, n, "version 5"), "version 1");
     free(b);
 
     b = mutate(10, 40, 2, &n);
@@ -370,10 +350,6 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "template"), "font index past the table");
     free(b);
 
-    b = mutate(T_AT(1) + 60, 1, 4, &n);          /* the reserved word */
-    CHECK(refuses(b, n, "template"), "a non-zero reserved word is refused");
-    free(b);
-
     b = mutate(T_AT(1) + 15, 9, 1, &n);          /* a count past the sheet's eight */
     CHECK(refuses(b, n, "template"), "a canvas count past eight is refused");
     free(b);
@@ -390,24 +366,24 @@ static void test_refusals(void)
     CHECK(refuses(b, n, "prim"), "prim kind out of range");
     free(b);
 
-    b = mutate(P_AT(0) + 1, 12, 1, &n);          /* fill 12, past the literal colour */
-    CHECK(refuses(b, n, "prim"), "prim fill out of range");
+    b = mutate(P_AT(0) + 1, 1, 1, &n);           /* the prim record's reserved byte */
+    CHECK(refuses(b, n, "prim"), "a non-zero reserved prim byte is refused");
+    free(b);
+
+    b = mutate(P_AT(0) + 20, 0x01000000, 4, &n); /* a colour above RGB888 */
+    CHECK(refuses(b, n, "prim"), "a prim colour above RGB888 is refused");
     free(b);
 
     b = mutate(P_AT(0) + 16, 0, 4, &n);          /* a rect with a text offset */
     CHECK(refuses(b, n, "prim"), "rect with a text offset");
     free(b);
 
-    b = mutate(P_AT(2) + 1, LABEL_FILL_PAPER, 1, &n);  /* a text in the paper's colour */
-    CHECK(refuses(b, n, "prim"), "a text in the paper's colour is refused");
+    b = mutate(P_AT(2) + 20, 0xF2EDE3, 4, &n);   /* a text in the paper's own colour */
+    CHECK(opens(b, n), "a text may print in any colour, including the paper's");
     free(b);
 
-    b = mutate(P_AT(2) + 1, LABEL_FILL_BAND1, 1, &n);  /* a text on a band */
-    CHECK(opens(b, n), "a text may print in a band's colour");
-    free(b);
-
-    b = mutate(P_AT(2) + 1, LABEL_FILL_BAND7, 1, &n);  /* the eighth band */
-    CHECK(opens(b, n), "a text may print in the last band's colour");
+    b = mutate(P_AT(2) + 20, 0xFFFFFF, 4, &n);   /* plain white */
+    CHECK(opens(b, n), "a text may print in white");
     free(b);
 
     b = mutate(P_AT(2) + 16, POOL_N + 4, 4, &n); /* text offset past the pool */

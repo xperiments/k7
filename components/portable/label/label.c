@@ -22,7 +22,7 @@ struct label_sheet {
     uint16_t       prims;
     uint16_t       slots;
     uint16_t       pool_size;
-    const uint8_t *tmpl;   /* the template array: templates x 64 */
+    const uint8_t *tmpl;   /* the template array: templates x 16 */
     const uint8_t *canvas; /* the canvas array: templates x LABEL_CANVAS_MAX x 4 */
     const uint8_t *prim;   /* the prim array: prims x 24 */
     const uint8_t *slot;   /* the slot array: slots x 8 */
@@ -87,12 +87,12 @@ static const uint8_t *slot_at(const label_sheet_t *s, uint16_t i)
     return s->slot + (size_t)i * LABEL_SLOT_SIZE;
 }
 
-/* One prim: a kind, a colour, a box, a rotation, and either a string or a slot name. */
+/* One prim: a kind, its own colour, a box, a rotation, and either a string or a slot name. */
 static bool prim_ok(const label_sheet_t *s, uint16_t i)
 {
     const uint8_t *p = prim_at(s, i);
     const uint8_t kind = p[0];
-    const uint8_t fill = p[1];
+    const uint8_t reserved = p[1];
     const uint8_t font = p[2];
     const uint8_t align = p[3];
     /* x, y and w are not checked: a prim may sit outside the print, which crops it
@@ -100,10 +100,13 @@ static bool prim_ok(const label_sheet_t *s, uint16_t i)
     const uint16_t h = rd16(p + 10);
     const uint16_t rot = rd16(p + 14);
     const uint32_t text = rd32(p + 16);
+    const uint32_t colour = rd32(p + 20);
 
-    if (kind > LABEL_TEXT_SLOT || fill > LABEL_FILL_LITERAL) return false;
+    if (kind > LABEL_TEXT_SLOT) return false;
+    if (reserved != 0) return false;
     if (font > LABEL_FONT_CAPTION || align > LABEL_ALIGN_RIGHT) return false;
     if (rot > 3599u) return false;
+    if (colour > 0xFFFFFFu) return false;
 
     if (kind == LABEL_RECT) {
         /* A rect may sit outside the print: the print crops it, and the editor marks what will
@@ -116,8 +119,6 @@ static bool prim_ok(const label_sheet_t *s, uint16_t i)
          * print with its ink inside it prints correctly. The editor measures the ink and refuses
          * it when the ink leaves the print (label-templates.md 1), so only the fields are checked
          * here. */
-        /* The ink or any of the eight bands: a text may print on a band in its own colour. */
-        if (fill < LABEL_FILL_INK || fill > LABEL_FILL_BAND7) return false;
         if (!string_in(s->pool, s->pool_size, text)) return false;
     }
     return true;
@@ -146,12 +147,10 @@ static bool template_ok(const label_sheet_t *s, uint16_t t, uint8_t font_count)
     if ((uint32_t)slot_start + slot_count > s->slots) return false;
     for (int role = 0; role < 3; role++)
         if (p[12 + role] >= font_count) return false;
-    /* Version 4: byte 15 is the canvas count and the last four bytes are reserved. The list
-     * follows the template array; entries past the count are zero, and the count may not
-     * exceed the sheet's eight slots. */
+    /* Version 5: byte 15 is the canvas count. The list follows the template array; entries
+     * past the count are zero, and the count may not exceed the sheet's eight slots. */
     const uint8_t canvas_count = p[15];
     if (canvas_count > LABEL_CANVAS_MAX) return false;
-    if (rd32(p + 60) != 0) return false;
     for (uint8_t i = 0; i < LABEL_CANVAS_MAX; i++) {
         const uint32_t colour = rd32(canvas_at(s, t, i));
         if (i < canvas_count) {
@@ -173,7 +172,7 @@ label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_cou
     if (size < LABEL_HEADER_SIZE) return fail(why, why_size, "shorter than its header");
 
     if (memcmp(blob, LABEL_MAGIC, 8) != 0) return fail(why, why_size, "magic is not K7LBL");
-    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 4");
+    if (rd16(blob + 8) != LABEL_VERSION) return fail(why, why_size, "not sheet version 5");
     if (rd16(blob + 10) != LABEL_HEADER_SIZE) return fail(why, why_size, "header size is not 32");
     if (rd16(blob + 20) != LABEL_SPACE_W || rd16(blob + 22) != LABEL_SPACE_H)
         return fail(why, why_size, "space is not 748x359");
@@ -275,7 +274,6 @@ bool label_prim_at(const label_sheet_t *s, uint16_t t, uint16_t i, label_prim_t 
 
     const uint8_t *p = prim_at(s, rd16(template_at(s, t) + 4) + i);
     out->kind = p[0];
-    out->fill = p[1];
     out->font = p[2];
     out->align = p[3];
     out->x = (int16_t)rd16(p + 4);
@@ -284,7 +282,7 @@ bool label_prim_at(const label_sheet_t *s, uint16_t t, uint16_t i, label_prim_t 
     out->h = rd16(p + 10);
     out->r = rd16(p + 12);
     out->rot10 = (int16_t)rd16(p + 14);
-    out->literal = rd32(p + 20);
+    out->colour = rd32(p + 20);
     return true;
 }
 
@@ -311,19 +309,6 @@ bool label_slot_at(const label_sheet_t *s, uint16_t t, uint16_t i, label_slot_t 
     out->max = p[4];
     out->name = (const char *)s->pool + rd32(p);
     return true;
-}
-
-label_inks_t label_inks(const label_sheet_t *s, uint16_t t)
-{
-    label_inks_t inks = {0, 0, 0, {0}};
-    if (!s || t >= s->templates) return inks;
-
-    const uint8_t *p = template_at(s, t);
-    inks.paper = rd32(p + 16);
-    inks.ink = rd32(p + 20);
-    inks.rule = rd32(p + 24);
-    for (int i = 0; i < (int)LABEL_BAND_COUNT; i++) inks.band[i] = rd32(p + 28 + i * 4);
-    return inks;
 }
 
 uint8_t label_font(const label_sheet_t *s, uint16_t t, uint8_t role)

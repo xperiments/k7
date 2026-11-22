@@ -41,7 +41,7 @@ test("registers with Chrome's WebMCP and runs a tool", async ({ page }) => {
       text: "Native agent",
       x: 80,
       y: 250,
-      role: "band.6",
+      color: "#3b6e8f",
     });
     return typeof result === "string" ? JSON.parse(result) : result;
   });

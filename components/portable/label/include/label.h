@@ -24,15 +24,15 @@ extern "C" {
 
 /* The only magic this reader accepts: `K7LBL`, NUL-padded to eight bytes. */
 #define LABEL_MAGIC        "K7LBL\0\0\0"
-#define LABEL_VERSION      4u   /* the template record carries the canvas count and list */
+#define LABEL_VERSION      5u   /* the literal colours: every prim paints its own RGB888 */
 #define LABEL_HEADER_SIZE  32u
-#define LABEL_TEMPLATE_SIZE 64u
+#define LABEL_TEMPLATE_SIZE 16u
 #define LABEL_PRIM_SIZE    24u
 #define LABEL_SLOT_SIZE    8u
 
-/* LABEL_SPACE_W/H, LABEL_BAND_COUNT, LABEL_VALUE_MAX, LABEL_PRIM_MAX, LABEL_SLOT_MAX and
- * LABEL_TEMPLATE_MAX are label_vocab.h's: the editor refuses a design by the same numbers,
- * and `make -C host label` fails when the two copies of that table disagree. */
+/* LABEL_SPACE_W/H, LABEL_VALUE_MAX, LABEL_PRIM_MAX, LABEL_SLOT_MAX and LABEL_TEMPLATE_MAX
+ * are label_vocab.h's: the editor refuses a design by the same numbers, and
+ * `make -C host label` fails when the two copies of that table disagree. */
 
 typedef enum {
     LABEL_OK = 0,
@@ -50,22 +50,6 @@ typedef enum {
     LABEL_TEXT_SLOT = 2,    /* the text is a slot's name; the value is set per Track */
 } label_kind_t;
 
-/* What a prim paints with. The colours are the design's, not the palette's. */
-typedef enum {
-    LABEL_FILL_PAPER = 0,
-    LABEL_FILL_INK,
-    LABEL_FILL_RULE,
-    LABEL_FILL_BAND0,
-    LABEL_FILL_BAND1,
-    LABEL_FILL_BAND2,
-    LABEL_FILL_BAND3,
-    LABEL_FILL_BAND4,
-    LABEL_FILL_BAND5,
-    LABEL_FILL_BAND6,
-    LABEL_FILL_BAND7,
-    LABEL_FILL_LITERAL,     /* the one literal colour a design may use; see `literal` */
-} label_fill_t;
-
 /* A text's face, by role. The index into the app's k_label_font[] comes from
  * label_font(); this is which of the design's three roles the prim names. */
 typedef enum {
@@ -81,17 +65,17 @@ typedef enum {
 } label_align_t;
 
 /* One prim, as read. Positions are in the design's space (748x359), tenths of a degree for
- * rotation, and `text` is only meaningful for the two text kinds. */
+ * rotation, and `text` is only meaningful for the two text kinds. A prim paints its own
+ * colour: `colour` is RGB888 in the low 24 bits, a rect's fill or a text's colour. */
 typedef struct {
     uint8_t  kind;       /* label_kind_t */
-    uint8_t  fill;       /* label_fill_t */
     uint8_t  font;       /* label_font_role_t; a rect's is TITLE and unused */
     uint8_t  align;      /* label_align_t; a rect's is LEFT and unused */
     int16_t  x, y;
     uint16_t w, h;       /* h is 0 for a text */
     uint16_t r;          /* radius; 0 for a text */
     int16_t  rot10;      /* tenths of a degree, 0..3599 */
-    uint32_t literal;    /* RGB888, only when fill == LABEL_FILL_LITERAL */
+    uint32_t colour;     /* RGB888, always painted */
 } label_prim_t;
 
 /* One slot of a template: its name and the most characters the design allows. */
@@ -100,18 +84,12 @@ typedef struct {
     uint8_t     max;
 } label_slot_t;
 
-/* A design's role colours, RGB888 in the low 24 bits: paper, ink, rule and the eight
- * bands. A band the design did not declare is 0. */
-typedef struct {
-    uint32_t paper, ink, rule, band[LABEL_BAND_COUNT];
-} label_inks_t;
-
 /* ---------------------------------------------------------------- the sheet */
 
 /* Validate `size` bytes at `blob` and take a reference to them. The bytes must outlive the
  * sheet (on the device they are flash). `font_count` is the number of entries in the app's
- * k_label_font[] - LABEL_FONT_COUNT from the generated header - which is what a prim's font
- * index is checked against. `why`, when non-NULL, receives one sentence naming the first
+ * k_label_font[] - LABEL_FONT_COUNT from the generated header - which is what a template's
+ * font indices are checked against. `why`, when non-NULL, receives one sentence naming the first
  * failure (or "" on success). */
 label_result_t label_open_why(const uint8_t *blob, size_t size, uint8_t font_count,
                               label_sheet_t **out, char *why, size_t why_size);
@@ -139,9 +117,6 @@ const char *label_prim_text(const label_sheet_t *s, uint16_t t, uint16_t i);
 
 uint16_t label_slot_count(const label_sheet_t *s, uint16_t t);
 bool     label_slot_at(const label_sheet_t *s, uint16_t t, uint16_t i, label_slot_t *out);
-
-/* The design's colours. */
-label_inks_t label_inks(const label_sheet_t *s, uint16_t t);
 
 /* How many canvas backgrounds the design carries: 0 when it has none. The player picks an
  * entry by the Track's cassette row (`row % count`), so the list is the design's, not one

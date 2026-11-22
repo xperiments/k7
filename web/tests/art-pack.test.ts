@@ -40,13 +40,14 @@ describe('the pack header', () => {
     expect(pack.name).toBe('Neon 2026');
     expect(pack.author).toBe('Mara Vidal');
     expect(pack.designCount).toBe(2);
-    expect(pack.sheetVersion).toBe(4);
+    expect(pack.sheetVersion).toBe(5);
     expect(pack.fontCount).toBe(3);
     expect(pack.size).toBe(bytes.length);
     expect(pack.packCrc).toBe(crc32(bytes.subarray(128)));
     expect(pack.sheetCrc).toBe(new DataView(bytes.buffer).getUint32(128 + 16, true));
     expect(pack.designs.map((design) => design.id)).toEqual(designs.map((design) => design.id));
-    expect(pack.jcards).toMatchObject({ v: 1 });
+    expect(pack.jcards).toMatchObject({ v: 2 });
+    expect(pack.designs[0]?.jcard.background).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
   it('refuses a file shorter than the header', () => {
@@ -89,7 +90,14 @@ describe('the pack header', () => {
   });
 
   it('refuses a sheet version or font count the compatibility contract forbids', () => {
-    expect(refusal(buildPackBytes({ headerSheetVersion: 3 })).message).toMatch(/sheet version/);
+    const old = refusal(buildPackBytes({ headerSheetVersion: 4 }));
+    expect(old.part).toBe('header');
+    expect(old.message).toBe(
+      "The pack's label sheet is from an older editor (version 4); publish the designs again from /k7art.",
+    );
+    expect(refusal(buildPackBytes({ headerSheetVersion: 3 })).message).toMatch(
+      /label sheet is version 3, not 5/,
+    );
     expect(refusal(buildPackBytes({ fontCount: 0 })).message).toMatch(/font count/);
   });
 
@@ -106,7 +114,12 @@ describe('the pack header', () => {
 describe('the label sheet', () => {
   it('refuses a sheet that is not the packer’s', () => {
     expect(refusal(buildPackBytes({ sheetMagic: 'NOTLBL\0\0' })).part).toBe('sheet');
-    expect(refusal(buildPackBytes({ sheetVersion: 3 })).message).toMatch(/not version 4/);
+    expect(refusal(buildPackBytes({ sheetVersion: 3 })).message).toMatch(
+      /label sheet is version 3, not 5/,
+    );
+    const oldSheet = refusal(buildPackBytes({ sheetVersion: 4 }));
+    expect(oldSheet.part).toBe('sheet');
+    expect(oldSheet.message).toMatch(/older editor \(version 4\)/);
     expect(refusal(buildPackBytes({ sheetSpace: { w: 700, h: 359 } })).message).toMatch(
       /748x359/,
     );
@@ -130,17 +143,17 @@ describe('the J-cards', () => {
     expect(error.message).toMatch(/J-cards carry 1/);
   });
 
-  it('refuses bytes that are not JSON, and a document that is not version 1', () => {
+  it('refuses bytes that are not JSON, and a document that is not version 2', () => {
     expect(refusal(buildPackBytes({ jcardsRaw: '{' })).part).toBe('jcards');
-    expect(refusal(buildPackBytes({ jcardsOverride: { v: 2, designs: [] } })).part).toBe(
-      'jcards',
-    );
+    const old = refusal(buildPackBytes({ jcardsOverride: { v: 1, designs: [] } }));
+    expect(old.part).toBe('jcards');
+    expect(old.message).toBe('The J-cards are not a version 2 { designs } document.');
   });
 
   it('refuses designs that are not in id order', () => {
     const designs = seedDesigns(2);
     const reversed = {
-      v: 1,
+      v: 2,
       designs: [designs[1], designs[0]],
     };
     const error = refusal(buildPackBytes({ designs, jcardsOverride: reversed }));
@@ -151,7 +164,7 @@ describe('the J-cards', () => {
   it('refuses a design the renderer cannot draw', () => {
     const designs = seedDesigns(1);
     const broken = {
-      v: 1,
+      v: 2,
       designs: [{ ...designs[0], jcard: { ...designs[0]!.jcard, parts: {} } }],
     };
     const error = refusal(buildPackBytes({ designs, jcardsOverride: broken }));

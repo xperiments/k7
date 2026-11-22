@@ -1,6 +1,6 @@
 ---
 name: k7-art
-description: Design a K7 cassette artwork — the label the K7 player prints on its two-finger screen and the J-card the webapp draws on an album with no cover — through the K7Art Editor's WebMCP tools. Read the open K7Art, lay out the label's paper, bands and type and the J-card's flap, spine and cover, bind the fields, validate, export the K7Art and publish a pack. Use when asked to make, change, review or explain a K7 cassette label or J-card.
+description: Design a K7 cassette artwork — the label the K7 player prints on its two-finger screen and the J-card the webapp draws on an album with no cover — through the K7Art Editor's WebMCP tools. Read the open K7Art, lay out the label's mask, its layers' colours and type and the J-card's flap, spine and cover, bind the fields, validate, export the K7Art and publish a pack. Use when asked to make, change, review or explain a K7 cassette label or J-card.
 ---
 
 # A K7Art for the K7
@@ -35,10 +35,12 @@ The label half:
   of x 651. All three roles fit either strip — 29 px of ink for a title, 17 for a caption,
   55 for a numeral's digits — so the discipline is only to keep the whole line inside one of
   them. Ornaments may cross the hole; they are simply not seen there.
-- The **paper** is the design's background: a rounded rect filling the print, its colour and
-  radius taken from the LayerMask. `set-design` gives you one, and a new document starts with
-  `#c7a867` at radius 10. Without paper a design has no background, and a shape may not fill
-  with `paper` when there is none.
+- The **mask** is the design's background and the clip the editor shows: a rounded rect filling
+  the print, its colour and radius set through `set-design` (`maskColor`, `maskRadius`). A new
+  document starts with `#c7a867` at radius 10; a design without one has no background.
+- Every layer carries **its own colour**: a shape's `color` is its fill, a text's is its type.
+  There are no shared roles and no palette to declare: `k7art-add-layer { color: "#8a5d34" }`,
+  and any colour goes on any element.
 - The **canvas background** is the cassette's body and the 800 × 480 screen behind it while the
   two-finger pose shows the tape: up to eight presets with one active, set through `set-design`'s
   `backgrounds` and `activeBackground` (`background` sets the active preset's colour). The whole
@@ -51,15 +53,15 @@ The J-card half:
 - The sheet is **1300 × 1280 at 320 units per inch** — 4.0625 × 4 in — with the **flap** 0–320,
   the **spine** 320–480 and the **cover** 480–1300; the folds are guides, and art may cross
   them.
-- It uses the same eleven colour roles and the same three faces as the label, with its own three
-  sizes. Its texts bind to the **label's eleven Slots** (`song_title`, `bpm`, `musical_key`, …) as
+- It uses the same three faces as the label, with its own three sizes; its layers carry their
+  own colours like the label's. Its texts bind to the **label's eleven Slots** (`song_title`, `bpm`, `musical_key`, …) as
   well as the J-card's own **`title`** (the album's name or the Track's), **`artist`** (the
   byline) and **`meta`** (the cassette line). A surface fills the fields it knows and prints
   nothing for the rest: an album's case has the name, byline, genre and cassette line, so a
   tempo on a case prints empty — the design's test value is the canvas's, not the App's.
-- The sheet has **its own paper**, `jcardPaper` on `set-design`: it starts equal to the label's
-  and moves independently, and the webapp paints the sheet with it. `paper` stays the label's
-  (the LayerMask); the two are never set by the same argument.
+- The sheet has **its own background**, `jcardBackground` on `set-design`: the colour painted
+  under its prims, independent of the label's mask. `paper` stays the label's; the two are never
+  set by the same argument.
 - A text's box is **its own lines**, capped by the sheet's bottom, and `rotation` turns it about
   that box — a spine line at 90° runs up the panel rather than across it.
 - The webapp draws the cover on the case front and the album card — a centre crop, so keep the
@@ -80,8 +82,8 @@ If the page's routes are blocked, call `k7art-guide` instead of reading `/k7art/
 If the tools themselves cannot be reached, every action still has a visible control — see
 *Driving the visible controls*, below — so a label is still finishable in this session.
 
-- **Read first, every time.** `k7art-read` returns the board, the fields, the colour
-  roles, the type roles, the open documents, and the active design's layers, groups and export
+- **Read first, every time.** `k7art-read` returns the board, the fields, the type roles, the
+  open documents, and the active design's layers (each with its colour), groups and export
   errors.
 - **The page is the truth; this file is the guide.** If a number here and the page disagree,
   the page wins: `fields` and `typeRoles` in the read are the live vocabulary.
@@ -92,8 +94,11 @@ If the tools themselves cannot be reached, every action still has a visible cont
 
 ## The vocabulary
 
-**Colour roles.** `paper`, `ink`, `rule`, `band.0` … `band.7`. A shape (rect, square, circle)
-may use any of them; a text may print only `ink` or a band. `paper` is the LayerMask's colour.
+**Colours.** Every layer's `color` is a `#RRGGBB` value: a shape's fill, a text's type. Any
+colour may go on any element, and a text may print on any fill. The label's background is the
+**mask** (`maskColor`, `maskRadius` on `set-design`); the J-card's is its **background**
+(`jcardBackground`). A layer with no colour falls back to the ink for a text, the first swatch
+for a shape.
 
 **Visibility.** A layer can be hidden: `k7art-update-layer { hidden: true }` or the eye in the
 Layers panel. A hidden layer stays in the document and the panel, and it is not drawn — canvas,
@@ -108,9 +113,6 @@ middle of its bounds, and its scale handle on their far corner, which moves and 
 member about the near corner with one factor for both axes — a text's box scales with it and its
 type keeps its role's size. It is the editor's: the file carries the layers, not the grouping.
 `k7art-group-layers` groups or ungroups the selection.
-
-**Bands.** The eight band colours are the design's palette. Declare 4 to 8 of them; the sheet
-always carries eight slots, so a design with four pads the rest.
 
 **Type.** Three roles, and each is a face *and* a size. There are no others:
 
@@ -152,16 +154,16 @@ cut at 96 characters. A design with no layer at all is refused.
 2. **A document** — `k7art-document { action: "new", name: "…" }` for a clean design, or
    work in the active one. A new document is the panel's page grey (`#909090`), a paper mask
    and no layers.
-3. **The colourway** — `k7art-set-design`: `templateId` (`k7.my-name`), `name`,
-   `backgrounds` and `activeBackground` (or `background` for the active one), `ink`, `rule`, the
-   eight `bands`, `paper`, `paperRadius`. `paper` is the label's; `jcardPaper` is the sheet's
-   own and is the one the J-card is painted with.
+3. **The design** — `k7art-set-design`: `templateId` (`k7.my-name`), `name`, `backgrounds` and
+   `activeBackground` (or `background` for the active one), the label's `maskColor` and
+   `maskRadius`, and the J-card's `jcardBackground`. Each layer's colour is set on
+   the layer, not here.
 4. **Layers, back to front.** A layer added now prints over the ones before it;
    `k7art-move-layer` raises, lowers, or sends one to the top or bottom. Rects make
    bands, rules and blocks.
 5. **Texts.** A text with `text` is static (ornaments: `SIDE A`, a numeral); a text with
    `field` prints the player's data. Give one or the other, never both. `fontRole` picks the
-   type role, `align` its alignment, `role` its colour. A static text's box is measured from
+   type role, `align` its alignment, `color` its colour. A static text's box is measured from
    its ink at export, so its `width` is replaced rather than respected.
 6. **Previews are yours, not the player's.** A dynamic text previews its simulated value;
    `k7art-set-field-value` changes that preview only, never what the player prints.
@@ -169,7 +171,7 @@ cut at 96 characters. A design with no layer at all is refused.
    takes design units of its 1300 × 1280 sheet: the flap 0–320, the spine 320–480 and the
    cover 480–1300, with the folds as guides — art may cross them. Its texts bind to `title`,
    `artist` and `meta` through `field` (never a label Slot), its three sizes are `jcardFonts`,
-   and its sheet colour is `jcardPaper`. Keep the cover's words inside the safe square,
+   and its sheet colour is `jcardBackground`. Keep the cover's words inside the safe square,
    x 480–1300 and y 230–1050: the album card is exactly that centre crop.
 8. **Validate** — `k7art-validate` checks every open design, both surfaces; fix until it is
    clean.
@@ -219,7 +221,7 @@ Add a layer to the active design, on the label's 748x359 print or the J-card's 1
 | `height` | `number` |  | Height in design units, for a shape. A text's height follows its type. Minimum 1. |
 | `text` | `string` |  | The string a static text prints. Do not combine with field. |
 | `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | The field a dynamic text prints. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood, title, artist, meta. Do not combine with text. |
-| `role` | `string` |  | The colour role. A shape takes paper, ink, band.0, band.1, band.2, band.3, band.4, band.5, band.6, band.7, rule; a text takes ink, band.0, band.1, band.2, band.3, band.4, band.5, band.6, band.7. |
+| `color` | `string` |  | The layer's colour, #RRGGBB: a shape's fill or a text's type. Defaults to the swatch row / the ink. |
 | `fontRole` | `title`, `numeral`, `caption` |  | Which type role a text prints in. |
 | `align` | `left`, `center`, `right` |  | A text's horizontal alignment. |
 | `layerName` | `string` |  | The layer's name in the Layers panel. |
@@ -227,7 +229,7 @@ Add a layer to the active design, on the label's 748x359 print or the J-card's 1
 
 ### `k7art-update-layer`
 
-Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour role, font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.
+Change one layer of the active design, on the label or the J-card: position or size in that surface's units, rotation, its text or field, colour (#RRGGBB), font role, alignment, layer name, test value, lock or visibility. Only the fields given change. A hidden layer is not drawn and not exported.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -240,7 +242,7 @@ Change one layer of the active design, on the label or the J-card: position or s
 | `rotation` | `number` |  | Rotation in degrees, clockwise. |
 | `text` | `string` |  | Make the text static and print this string. |
 | `field` | `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `song_title`, `song_artist`, `song_album`, `genre`, `bpm`, `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood`, `title`, `artist`, `meta` |  | Make the text dynamic and print this field. The label's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood. The J-card's: song_title, song_artist, song_album, genre, bpm, musical_key, energy, danceability, valence, arousal, mood, title, artist, meta. |
-| `role` | `string` |  | The colour role to print in. |
+| `color` | `string` |  | The colour to print in, #RRGGBB. |
 | `fontRole` | `title`, `numeral`, `caption` |  | The text's type role. |
 | `align` | `left`, `center`, `right` |  | The text's horizontal alignment. |
 | `layerName` | `string` |  | The layer's name in the Layers panel. |
@@ -288,7 +290,7 @@ Group layers into one layer group, or ungroup a group, on either surface. Groupi
 
 ### `k7art-set-design`
 
-Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), its colourway (ink, rule, the eight bands, the label's paper and the J-card's own paper), its paper radius, one of the label's type roles' face and size, or one of the J-card's three type sizes. Every colour is a hex string; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
+Set the design's template id or name, its canvas background cycle (the K7 picks one by the Track's cassette row; the active one is only the editor's preview), the label's LayerMask colour and radius, the J-card sheet's background, one of the label's type roles' face and size, or one of the J-card's three type sizes. A layer's own colour is k7art-update-layer's; every colour is #RRGGBB; a label face and size must be a pair the sheet carries; a J-card size is 4..640 units.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -297,12 +299,9 @@ Set the design's template id or name, its canvas background cycle (the K7 picks 
 | `background` | `string` |  | The active canvas background, as #rrggbb; it sets the editor's preview preset. |
 | `backgrounds` | array of `string` |  | The canvas background cycle, as #rrggbb strings: one to 8. The K7 picks one by the Track's cassette row. |
 | `activeBackground` | `number` |  | The index of the editor's preview preset. Minimum 0. |
-| `ink` | `string` |  | The colour of the ink role, as #rrggbb. |
-| `rule` | `string` |  | The colour of the rule role, as #rrggbb. |
-| `bands` | array of `string` |  | The eight band colours, as #rrggbb strings, in band order. |
-| `paper` | `string` |  | The label's paper, as #rrggbb: the LayerMask's colour. Adds the LayerMask paper if the design has none. |
-| `jcardPaper` | `string` |  | The J-card sheet's own paper, as #rrggbb. It starts equal to the label's and moves independently; the webapp paints the sheet with it. |
-| `paperRadius` | `number` |  | The paper's corner radius in design pixels. Minimum 0. |
+| `maskColor` | `string` |  | The label's LayerMask colour, as #rrggbb: the paper the design paints behind its layers. Adds the LayerMask if the design has none. |
+| `jcardBackground` | `string` |  | The J-card sheet's own background, as #rrggbb: the colour painted under its prims. Independent of the label's mask. |
+| `maskRadius` | `number` |  | The LayerMask's corner radius in design pixels. Minimum 0. |
 | `fonts` | object |  | The label's type roles to change: a face from Archivo Narrow 600, Barlow Condensed 700, IBM Plex Mono 500 and one of that face's sizes. |
 | `fonts.title` | object |  | The label's title role. |
 | `fonts.title.face` | `Archivo Narrow 600`, `Barlow Condensed 700`, `IBM Plex Mono 500` |  | The face name. |
@@ -393,21 +392,21 @@ For more looks to aim at — the sleeve devices, and seven pasteable prompts, th
 built — see `tools/LabelEditor/docs/label-prompts.md`.
 
 
-The first is the smallest label that reads: a top strip of one band, and a numeral above the
-window. The colour is set in `set-design` so the cream ink reads on the green band.
+The first is the smallest label that reads: a top strip of one colour, and a numeral above the
+window. The cream type is the layer's own colour on the strip's.
 
 ```js
 await call("k7art-document", { action: "new", name: "HOLA" });
 await call("k7art-set-design", {
   templateId: "k7.hola", name: "HOLA",
-  ink: "#f2ecdf", paper: "#c7a867", paperRadius: 12,
+  maskColor: "#c7a867", maskRadius: 12,
 });
 await call("k7art-add-layer", {
-  type: "rect", x: 0, y: 0, width: 748, height: 101, role: "band.7",
+  type: "rect", x: 0, y: 0, width: 748, height: 101, color: "#2f4b3a",
 });
 await call("k7art-add-layer", {
   type: "text", text: "HOLA", x: 0, y: 4, width: 748,
-  role: "ink", fontRole: "numeral", align: "center",
+  color: "#f2ecdf", fontRole: "numeral", align: "center",
 });
 const { template, errors } = await call("k7art-export-template", {});
 ```
@@ -419,46 +418,43 @@ BPM, and the small print below it.
 await call("k7art-document", { action: "new", name: "Neon Skyline" });
 await call("k7art-set-design", {
   templateId: "k7.neon-skyline", name: "Neon Skyline",
-  ink: "#f2ecdf", rule: "#8e7e4a",
-  bands: ["#c68b2e", "#a24e2c", "#8a5d34", "#6b7a2f",
-          "#3b6e8f", "#7a3b52", "#b9ac8e", "#2f4b3a"],
-  paper: "#142538", paperRadius: 10,
+  maskColor: "#142538", maskRadius: 10,
 });
 // above the window: the title block
 await call("k7art-add-layer", {
-  type: "rect", x: 0, y: 0, width: 748, height: 101, role: "band.4",
+  type: "rect", x: 0, y: 0, width: 748, height: 101, color: "#3b6e8f",
 });
 await call("k7art-add-layer", {
   type: "text", field: "song_title", x: 24, y: 8, width: 520,
-  role: "ink", fontRole: "title",
+  color: "#f2ecdf", fontRole: "title",
 });
 await call("k7art-add-layer", {
   type: "text", field: "song_artist", x: 24, y: 46, width: 520,
-  role: "band.6", fontRole: "title",
+  color: "#b9ac8e", fontRole: "title",
 });
 await call("k7art-add-layer", {
   type: "text", field: "bpm", x: 580, y: 2, width: 144,
-  role: "ink", fontRole: "numeral", align: "right",
+  color: "#f2ecdf", fontRole: "numeral", align: "right",
 });
 // below the window: the small print
 await call("k7art-add-layer", {
-  type: "rect", x: 24, y: 300, width: 700, height: 2, role: "rule",
+  type: "rect", x: 24, y: 300, width: 700, height: 2, color: "#8e7e4a",
 });
 await call("k7art-add-layer", {
   type: "text", text: "SIDE A", x: 24, y: 272, width: 120,
-  role: "band.6", fontRole: "caption",
+  color: "#b9ac8e", fontRole: "caption",
 });
 await call("k7art-add-layer", {
   type: "text", field: "mood", x: 604, y: 272, width: 120,
-  role: "band.6", fontRole: "caption", align: "right",
+  color: "#b9ac8e", fontRole: "caption", align: "right",
 });
 await call("k7art-add-layer", {
   type: "text", field: "song_album", x: 24, y: 316, width: 420,
-  role: "ink", fontRole: "caption",
+  color: "#f2ecdf", fontRole: "caption",
 });
 await call("k7art-add-layer", {
   type: "text", field: "musical_key", x: 660, y: 316, width: 64,
-  role: "ink", fontRole: "caption", align: "right",
+  color: "#f2ecdf", fontRole: "caption", align: "right",
 });
 const { template, errors } = await call("k7art-export-template", {});
 ```
@@ -471,9 +467,8 @@ A refusal is a sentence naming the design and the layer, so read it rather than 
 
 - `templateId must look like k7.my-design` — lowercase letters, digits and dashes after
   `label.`, and it names the exported file.
-- `bands must be the eight band colours, in order` — pass all eight; the design may still
-  declare fewer when imported, the editor writes eight.
-- `role for a text must be one of ink, band.0, …` — a text never prints `paper` or `rule`.
+- `color for a text must be #RRGGBB` — every layer's colour is a literal hex, not a role name.
+- `fill: 'band.0' is not #RRGGBB` — the sheet no longer has roles; give the colour.
 - `field "…" is not one of …` — the eleven above are the whole list.
 - `give text for a static text or field for a dynamic one, not both`, `text must not be
   empty`, `a text's height follows its type; set width (the wrap width)`.

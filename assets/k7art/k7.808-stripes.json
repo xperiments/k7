@@ -1,27 +1,16 @@
 {
   "format": "k7art",
-  "v": 1,
+  "v": 2,
   "id": "k7.808-stripes",
   "name": "808 Stripes",
-  "inks": {
-    "paper": "#1b3a63",
-    "ink": "#f2ecdf",
-    "rule": "#3b6e8f",
-    "band": [
-      "#c23b66",
-      "#3b6e8f",
-      "#df7b35",
-      "#c68b2e",
-      "#f2ecdf",
-      "#142b4a",
-      "#e06b8a",
-      "#c7a867"
-    ]
-  },
   "label": {
     "space": {
       "w": 748,
       "h": 359
+    },
+    "mask": {
+      "color": "#1b3a63",
+      "r": 10
     },
     "aperture": {
       "x": 95,
@@ -74,23 +63,13 @@
     },
     "prims": [
       {
-        "t": "rect",
-        "x": 0,
-        "y": 0,
-        "w": 748,
-        "h": 359,
-        "r": 10,
-        "fill": "paper",
-        "still": true
-      },
-      {
         "t": "text",
         "slot": "bpm",
         "x": 24,
         "y": 2,
         "w": 140,
         "font": "numeral",
-        "color": "band.0",
+        "color": "#c23b66",
         "align": "left",
         "preview": "124"
       },
@@ -101,7 +80,7 @@
         "y": 6,
         "w": 330,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -112,7 +91,7 @@
         "y": 44,
         "w": 330,
         "font": "title",
-        "color": "band.1",
+        "color": "#3b6e8f",
         "align": "left",
         "preview": "The Analog Sons"
       },
@@ -123,7 +102,7 @@
         "w": 76,
         "h": 76,
         "r": 38,
-        "fill": "band.0",
+        "fill": "#c23b66",
         "still": true
       },
       {
@@ -132,7 +111,7 @@
         "y": 22,
         "w": 76,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "B"
       },
@@ -142,7 +121,7 @@
         "y": 150,
         "w": 748,
         "h": 2,
-        "fill": "band.0",
+        "fill": "#c23b66",
         "still": true
       },
       {
@@ -151,7 +130,7 @@
         "y": 190,
         "w": 748,
         "h": 2,
-        "fill": "band.2",
+        "fill": "#df7b35",
         "still": true
       },
       {
@@ -160,7 +139,7 @@
         "y": 230,
         "w": 748,
         "h": 2,
-        "fill": "band.0",
+        "fill": "#c23b66",
         "still": true
       },
       {
@@ -169,7 +148,7 @@
         "y": 262,
         "w": 748,
         "h": 5,
-        "fill": "band.0",
+        "fill": "#c23b66",
         "still": true
       },
       {
@@ -179,7 +158,7 @@
         "y": 272,
         "w": 480,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
         "preview": "Night Drive"
       },
@@ -190,7 +169,7 @@
         "y": 318,
         "w": 260,
         "font": "caption",
-        "color": "band.3",
+        "color": "#c68b2e",
         "align": "left",
         "preview": "relaxed"
       },
@@ -200,7 +179,7 @@
         "y": 272,
         "w": 124,
         "font": "caption",
-        "color": "band.0",
+        "color": "#c23b66",
         "align": "right",
         "text": "STEREO"
       },
@@ -211,7 +190,7 @@
         "y": 318,
         "w": 124,
         "font": "caption",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "right",
         "preview": "8A"
       },
@@ -221,7 +200,7 @@
         "y": 351,
         "w": 748,
         "h": 8,
-        "fill": "band.0",
+        "fill": "#c23b66",
         "still": true
       }
     ]
@@ -252,7 +231,7 @@
         "h": 1280
       }
     },
-    "paper": "#1b3a63",
+    "background": "#1b3a63",
     "fonts": {
       "title": {
         "ff": "Archivo Narrow 600",
@@ -272,17 +251,9 @@
         "t": "rect",
         "x": 0,
         "y": 0,
-        "w": 1300,
-        "h": 1280,
-        "fill": "paper"
-      },
-      {
-        "t": "rect",
-        "x": 0,
-        "y": 0,
         "w": 60,
         "h": 1280,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -290,7 +261,7 @@
         "y": 0,
         "w": 20,
         "h": 1280,
-        "fill": "band.2"
+        "fill": "#df7b35"
       },
       {
         "t": "rect",
@@ -298,7 +269,7 @@
         "y": 0,
         "w": 20,
         "h": 1280,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -307,7 +278,7 @@
         "w": 120,
         "h": 120,
         "r": 60,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -315,7 +286,7 @@
         "y": 496,
         "w": 120,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "B"
       },
@@ -325,7 +296,7 @@
         "y": 0,
         "w": 160,
         "h": 1280,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -333,7 +304,7 @@
         "y": 0,
         "w": 12,
         "h": 1280,
-        "fill": "band.2"
+        "fill": "#df7b35"
       },
       {
         "t": "text",
@@ -341,7 +312,7 @@
         "y": 560,
         "w": 140,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "808"
       },
@@ -351,7 +322,7 @@
         "y": 630,
         "w": 140,
         "font": "caption",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "STEREO"
       },
@@ -361,7 +332,7 @@
         "y": 0,
         "w": 820,
         "h": 230,
-        "fill": "paper"
+        "fill": "#1b3a63"
       },
       {
         "t": "rect",
@@ -369,7 +340,7 @@
         "y": 0,
         "w": 820,
         "h": 8,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -377,7 +348,7 @@
         "y": 30,
         "w": 700,
         "font": "numeral",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
         "text": "808"
       },
@@ -387,9 +358,9 @@
         "y": 168,
         "w": 700,
         "font": "caption",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
-        "text": "DRUM MACHINE \u00b7 STEREO"
+        "text": "DRUM MACHINE · STEREO"
       },
       {
         "t": "rect",
@@ -398,7 +369,7 @@
         "w": 160,
         "h": 160,
         "r": 80,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -406,7 +377,7 @@
         "y": 58,
         "w": 160,
         "font": "title",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "B"
       },
@@ -416,7 +387,7 @@
         "y": 205,
         "w": 820,
         "h": 4,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -425,7 +396,7 @@
         "w": 300,
         "h": 300,
         "r": 150,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -433,7 +404,7 @@
         "y": 260,
         "w": 820,
         "h": 4,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -441,7 +412,7 @@
         "y": 300,
         "w": 820,
         "h": 4,
-        "fill": "band.2"
+        "fill": "#df7b35"
       },
       {
         "t": "rect",
@@ -449,7 +420,7 @@
         "y": 340,
         "w": 820,
         "h": 4,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -457,7 +428,7 @@
         "y": 305,
         "w": 300,
         "font": "numeral",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "center",
         "text": "B"
       },
@@ -467,7 +438,7 @@
         "y": 700,
         "w": 820,
         "h": 2,
-        "fill": "rule"
+        "fill": "#3b6e8f"
       },
       {
         "t": "rect",
@@ -475,7 +446,7 @@
         "y": 720,
         "w": 820,
         "h": 5,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -484,7 +455,7 @@
         "y": 760,
         "w": 700,
         "font": "numeral",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
         "preview": "Neon Skyline"
       },
@@ -495,7 +466,7 @@
         "y": 890,
         "w": 700,
         "font": "title",
-        "color": "band.1",
+        "color": "#3b6e8f",
         "align": "left",
         "preview": "The Analog Sons"
       },
@@ -506,9 +477,9 @@
         "y": 975,
         "w": 700,
         "font": "caption",
-        "color": "band.3",
+        "color": "#c68b2e",
         "align": "left",
-        "preview": "Side A \u00b7 Side B"
+        "preview": "Side A · Side B"
       },
       {
         "t": "rect",
@@ -516,7 +487,7 @@
         "y": 1050,
         "w": 820,
         "h": 6,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "text",
@@ -524,9 +495,9 @@
         "y": 1090,
         "w": 700,
         "font": "caption",
-        "color": "ink",
+        "color": "#f2ecdf",
         "align": "left",
-        "text": "STEREO \u00b7 SIDE B"
+        "text": "STEREO · SIDE B"
       },
       {
         "t": "rect",
@@ -534,7 +505,7 @@
         "y": 1170,
         "w": 14,
         "h": 70,
-        "fill": "ink"
+        "fill": "#f2ecdf"
       },
       {
         "t": "rect",
@@ -542,7 +513,7 @@
         "y": 1170,
         "w": 6,
         "h": 70,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -550,7 +521,7 @@
         "y": 1170,
         "w": 14,
         "h": 70,
-        "fill": "ink"
+        "fill": "#f2ecdf"
       },
       {
         "t": "rect",
@@ -558,7 +529,7 @@
         "y": 1170,
         "w": 6,
         "h": 70,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -566,7 +537,7 @@
         "y": 1170,
         "w": 14,
         "h": 70,
-        "fill": "ink"
+        "fill": "#f2ecdf"
       },
       {
         "t": "rect",
@@ -574,7 +545,7 @@
         "y": 1170,
         "w": 6,
         "h": 70,
-        "fill": "band.0"
+        "fill": "#c23b66"
       },
       {
         "t": "rect",
@@ -582,7 +553,7 @@
         "y": 1272,
         "w": 820,
         "h": 8,
-        "fill": "band.0"
+        "fill": "#c23b66"
       }
     ]
   }

@@ -25,9 +25,10 @@ export const PACK_NAME_MAX = 32;
 export const PACK_AUTHOR_MAX = 32;
 
 export const SHEET_MAGIC = 'K7LBL\0\0\0';
-export const SHEET_VERSION = 4;
+export const SHEET_VERSION = 5;
 export const SHEET_HEADER_SIZE = 32;
-export const SHEET_TEMPLATE_SIZE = 64;
+/** Version 5 is the literal colours: a template record carries no inks. */
+export const SHEET_TEMPLATE_SIZE = 16;
 export const SHEET_PRIM_SIZE = 24;
 export const SHEET_SLOT_SIZE = 8;
 export const SHEET_SPACE = { w: 748, h: 359 } as const;
@@ -52,6 +53,23 @@ export class ArtPackError extends Error {
   }
 }
 
+/**
+ * The plain line the Art packs page shows for a sheet from another version: an old pack is
+ * refused, not read, and its designs are published again from the editor (art-packs.md §1).
+ */
+function sheetVersionError(version: number, part: ArtPackPart): ArtPackError {
+  if (version === 4) {
+    return new ArtPackError(
+      part,
+      "The pack's label sheet is from an older editor (version 4); publish the designs again from /k7art.",
+    );
+  }
+  return new ArtPackError(
+    part,
+    `The pack's label sheet is version ${version}, not ${SHEET_VERSION}; publish the designs again from /k7art.`,
+  );
+}
+
 /** The pack as the App can use it: the header's facts, its J-cards, and its bytes. */
 export interface ArtPack {
   /** An owned copy, so a caller may drop its buffer and an upload may still send it. */
@@ -68,7 +86,7 @@ export interface ArtPack {
   packCrc: number;
   size: number;
   /**
-   * The J-cards document itself (`{ v: 1, designs: [...] }`), kept as it was parsed so the
+   * The J-cards document itself (`{ v: 2, designs: [...] }`), kept as it was parsed so the
    * IndexedDB cache stores the payload rather than a second shape of it.
    */
   jcards: unknown;
@@ -148,7 +166,7 @@ function readSheet(sheet: Uint8Array, designCount: number, fontCount: number): n
     throw new ArtPackError('sheet', "The label sheet's magic is not K7LBL.");
   }
   if (u16(sheet, 8) !== SHEET_VERSION) {
-    throw new ArtPackError('sheet', `The label sheet is not version ${SHEET_VERSION}.`);
+    throw sheetVersionError(u16(sheet, 8), 'sheet');
   }
   if (u16(sheet, 10) !== SHEET_HEADER_SIZE) {
     throw new ArtPackError('sheet', "The label sheet's header size is not 32.");
@@ -240,9 +258,6 @@ function readSheet(sheet: Uint8Array, designCount: number, fontCount: number): n
     if (canvasCount > SHEET_CANVAS_MAX) {
       throw new ArtPackError('sheet', `Template ${template + 1} names too many canvases.`);
     }
-    if (u32(sheet, at + 60) !== 0) {
-      throw new ArtPackError('sheet', `Template ${template + 1}'s reserved bytes are not zero.`);
-    }
     for (let canvas = 0; canvas < SHEET_CANVAS_MAX; canvas += 1) {
       const colour = u32(sheet, canvasBase + template * SHEET_CANVAS_MAX * 4 + canvas * 4);
       if (canvas < canvasCount ? colour > 0xffffff : colour !== 0) {
@@ -254,24 +269,22 @@ function readSheet(sheet: Uint8Array, designCount: number, fontCount: number): n
   for (let index = 0; index < prims; index += 1) {
     const at = primBase + index * SHEET_PRIM_SIZE;
     const kind = sheet[at]!;
-    const fill = sheet[at + 1]!;
+    const reserved = sheet[at + 1]!;
     const font = sheet[at + 2]!;
     const align = sheet[at + 3]!;
     const rotation = u16(sheet, at + 14);
-    if (kind > 2 || fill > 11 || font > 2 || align > 2 || rotation > 3599) {
+    if (kind > 2 || reserved !== 0 || font > 2 || align > 2 || rotation > 3599) {
       throw new ArtPackError('sheet', `Prim ${index + 1} is out of range.`);
+    }
+    if (u32(sheet, at + 20) > 0xffffff) {
+      throw new ArtPackError('sheet', `Prim ${index + 1}'s colour is not an RGB888 value.`);
     }
     if (kind === 0) {
       if (u16(sheet, at + 10) === 0 || u32(sheet, at + 16) !== 0xffffffff) {
         throw new ArtPackError('sheet', `Prim ${index + 1} is a rect with no height or a text offset.`);
       }
-    } else {
-      if (fill < 1 || fill > 8) {
-        throw new ArtPackError('sheet', `Prim ${index + 1} is a text with no readable colour.`);
-      }
-      if (!hasString(pool, u32(sheet, at + 16))) {
-        throw new ArtPackError('sheet', `Prim ${index + 1}'s text is outside the string pool.`);
-      }
+    } else if (!hasString(pool, u32(sheet, at + 16))) {
+      throw new ArtPackError('sheet', `Prim ${index + 1}'s text is outside the string pool.`);
     }
   }
 
@@ -344,7 +357,7 @@ export function readArtPack(input: Uint8Array): ArtPack {
     );
   }
   if (sheetVersion !== SHEET_VERSION) {
-    throw new ArtPackError('header', `The pack's sheet version is not ${SHEET_VERSION}.`);
+    throw sheetVersionError(sheetVersion, 'header');
   }
   if (fontCount === 0 || fontCount > 255) {
     throw new ArtPackError('header', "The pack's font count is not a table a firmware carries.");
@@ -399,8 +412,8 @@ export function readArtPack(input: Uint8Array): ArtPack {
   } catch {
     throw new ArtPackError('jcards', 'The J-cards are not JSON.');
   }
-  if (!isObject(jcards) || jcards.v !== 1 || !Array.isArray(jcards.designs)) {
-    throw new ArtPackError('jcards', 'The J-cards are not a version 1 { designs } document.');
+  if (!isObject(jcards) || jcards.v !== 2 || !Array.isArray(jcards.designs)) {
+    throw new ArtPackError('jcards', 'The J-cards are not a version 2 { designs } document.');
   }
   if (jcards.designs.length !== designCount) {
     throw new ArtPackError(
