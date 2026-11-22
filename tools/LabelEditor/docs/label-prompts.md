@@ -47,8 +47,8 @@ A wordmark is the seventh: a static text at 78 px as the brand line.
 
 ## The J-card, on the same sheet
 
-Every K7Art carries a **J-card** beside its label, and the pair shares the paper, the ink, the
-rule, the eight bands and the three faces. The J-card is one printed side of a cassette case,
+Every K7Art carries a **J-card** beside its label, and the pair shares its three faces; every
+layer on either surface carries its own colour. The J-card is one printed side of a cassette case,
 drawn as **1300 × 1280 units at 320 units per inch** — 4.0625 × 4 in — scored into three
 panels:
 
@@ -83,7 +83,7 @@ Five parts, in this order, then the deliverable:
 
 Everything else — the coordinates, the type roles, the window — the agent takes from its guide,
 so leave them out unless you want them exact. Every prompt makes a K7Art, so its J-card is part
-of the design: the editor starts one from the paper and the three fields, and a line can name
+of the design: the editor starts one from the mask colour and the three fields, and a line can name
 what the cover carries. The prompts below describe the label; the pair is exported together.
 The prompts give coordinates because they are the designs that were built and checked; copy them
 when you want that label, or use them as a shape for your own.
@@ -174,12 +174,12 @@ when you want that label, or use them as a shape for your own.
   filled rects and circles, and the label's three face-and-size pairs (32, 78 and 18 px); the
   J-card has the same three faces at its own sizes. Anything else the editor will refuse or
   approximate badly.
-- **A second colour on one text.** A text prints in the ink or in one of the bands, never on
-  the paper.
+- **A colour a layer does not have.** Every layer carries its own `#RRGGBB`; there is no
+  palette to declare, so the colour is set on the layer itself.
 - **Anything important in the window.** It is a hole; the tape shows through it. On the J-card,
   keep the words inside the cover's safe square rather than treating the whole sheet as the
   front.
-- **More than you need.** The sheet holds 48 layers, 16 Slots and up to 8 band colours per
+- **More than you need.** The sheet holds 48 layers and 16 Slots per
   design; the three built prompts above use 14, 15 and 14 layers — the dot grid prompts will
   need about 28 because every dot is a layer.
 
@@ -191,7 +191,7 @@ with no errors (14, 15 and 14 prims; `k7.hifi-1969`, `k7.808-stripes` and
 draws. They were built in a scratch browser session, so they are not in `assets/k7art/` — build
 one from its prompt, then Export it there. Their middles are quiet on purpose: on the device
 that is the Card's window, and the tape is what shows there. Each export is a K7Art, so give
-its J-card the design's paper and its three fields.
+its J-card the design's background colour and its three fields.
 
 ## The pack
 

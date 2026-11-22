@@ -43,17 +43,16 @@ digits 55, so the only rule is to keep the whole line out of the hole.
 A layer may **bleed** past the print — a band to the edge and further — and the print crops
 it, which is how a stripe runs off a sleeve.
 
-- **Paper** is the design's background: a rounded rect filling the print, its colour and
-  radius the LayerMask's. A design without paper has no background. It is the J-card's sheet
-  too.
+- **The mask** is the design's background and its clip: a rounded rect filling the print, its
+  colour and radius its own. A design without one has no background. The J-card has its own
+  background colour, independent of the label's mask.
 - **Canvas background** is the cassette's body and the screen behind it while the label is up:
   up to eight colours, cycled by the Track's cassette row (`row % count`). The whole list is
   packed; the editor's active one is only the preview. A design without one leaves the Track's
   cassette row alone, and a new design starts on the panel's page grey (`#909090`). The J-card
-  has no canvas: it is paper, and its sheet is the design's paper.
-- **Ink, rule and eight bands** are the colour roles. A shape paints with any role (or one
-  literal hex, explained in a note); a text prints in the ink or in one of the bands, never
-  on the paper. The J-card paints from the same eleven roles.
+  has no canvas: it is paper, and its sheet is its own background colour.
+- **Every layer carries its own colour**, a `#RRGGBB` value: a shape's fill, a text's type, a
+  J-card layer's paint. Any colour goes on any element; there is no palette to declare.
 - **Three type roles, and each is a face and a size**: `title` Archivo Narrow 600 at 32 px,
   `numeral` Barlow Condensed 700 at 78 px, `caption` IBM Plex Mono 500 at 18 px. Those are the
   three faces the sheet compiles; a face or size it does not carry is refused, because the
@@ -91,7 +90,7 @@ a cassette case — one side, **4.0625 × 4 in** — drawn as one sheet of **130
 ## What the player fills
 
 Eleven Slots, resolved from the track's snapshot when the track changes. A Slot the track
-has no value for prints empty — the paper, bands and rules stay, the words go.
+has no value for prints empty — the shapes and the background stay, the words go.
 
 | Slot | Prints | Example |
 |---|---|---|
@@ -115,8 +114,8 @@ are the App's, not the Snapshot's, and carry no `max`.
 ## Two roads to a design
 
 **By hand.** `npm run dev` (5178), or the deployed editor at **`/k7art`**, then Design: the
-tool rail adds rects, squares, circles and texts, the Inspector sets the colourway and the type
-roles, Layers keeps the order. The label surface draws the print; the J-card surface draws the
+tool rail adds rects, squares, circles and texts, the Inspector sets a layer's colour and the
+type roles, Layers keeps the order. The label surface draws the print; the J-card surface draws the
 one sheet, its three guides and the safe square. The **Preview** pane draws the label with the
 real LVGL build and the J-card in the DOM. **Export** writes the K7Art.
 
@@ -131,11 +130,11 @@ The dev server serves the same file at `http://localhost:5178/skill.md`, the pag
 `/k7art/skill.md`, and the page also answers it as a tool — `k7art-guide` — which is the road
 for a session that will not fetch a route. An agent that can drive WebMCP — ChatGPT desktop
 with the page open, Chrome with `--enable-features=WebMCP`, or any browser agent — can then
-read the design, lay out paper, bands and type, bind the label's Slots and the J-card's fields,
-validate, and export. What to ask for is a brief, not a tool call:
+read the design, lay out the mask, its layers' colours and type, bind the label's Slots and the
+J-card's fields, validate, and export. What to ask for is a brief, not a tool call:
 
 > Open http://localhost:5178, read /skill.md, and make a label for a synthwave track: deep
-> navy paper, a blue band across the top with the title, artist and BPM, and the album, mood
+> navy background, a blue band across the top with the title, artist and BPM, and the album, mood
 > and key in the small print below the window. Give its J-card the same navy and a big BPM on
 > the cover. Export the K7Art.
 
@@ -176,10 +175,10 @@ the tab strip's **+**.
 
 ## Before you land one
 
-- **Validate in the editor** (`k7art-validate`, or Export's errors): id shape `k7.<slug>`, the
-  eight bands, the label's face-and-size pairs, a text with neither a Slot nor a static string,
-  the J-card's three fields and its safe square, 48 layers and 16 Slots, paper when a shape
-  needs it.
+- **Validate in the editor** (`k7art-validate`, or Export's errors): id shape `k7.<slug>`, every
+  layer's colour is `#RRGGBB`, the label's face-and-size pairs, a text with neither a Slot nor a
+  static string, the J-card's three fields and its safe square, 48 layers and 16 Slots, a
+  colour on every shape.
 - **Look at it in Preview**: the label is the same LVGL build the panel runs; the J-card is the
   DOM render with the safe-square guide.
 - **Pack it**: `make -C host label` refuses what the packer refuses, by name, and prints the

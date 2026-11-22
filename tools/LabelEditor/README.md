@@ -41,17 +41,19 @@ npm run build      # dist/
   retired `label-template v1` file is migrated into a K7Art with a starter J-card. Anything the
   packer would refuse is refused on the way in, with the reason, and leaves no half-open tab
   behind.
-- **The label and the J-card.** The colour roles (paper, ink, eight bands, rule) and the three
-  faces are shared by both surfaces. The label has the canvas background presets and the active
-  one, its three compiled type pairs, its Slots and test values, groups and the LayerMask, which
-  clips to a rounded print. The J-card has its own three type sizes, its `title`/`artist`/`meta`
+- **The label and the J-card.** Every layer carries its own colour: a shape's fill, a text's
+  type, a J-card layer's paint. The three faces are shared by both surfaces, and the label's
+  background is the **mask** (a colour and a corner radius) while the J-card's is its own
+  **background**. The label has the canvas background presets and the active one, its three
+  compiled type pairs, its Slots and test values, groups and the LayerMask, which clips to a
+  rounded print. The J-card has its own three type sizes, its `title`/`artist`/`meta`
   fields and its safe square.
 - **A selection that moves, turns and scales as one.** One layer's corner resizes its own box; a
   group — or a ⌘-click selection — turns about its bounds and scales from their far corner, every
   member following, with one factor for both axes so a circle stays a circle and a rotated layer
-  stays a rotated layer. A text's box scales with the rest and its type does not: a role is one of
-  the sheet's three compiled pairs (or, on the J-card, one of its three sizes), not a size of the
-  layer's own.
+  stays a rotated layer. A text's box scales with the rest and its type does not: a type role is
+  one of the sheet's three compiled pairs (or, on the J-card, one of its three sizes), not a size
+  of the layer's own.
 - **An inspector that gives the open section the whole column.** Sections open one at a time
   (click the open header to close it), so no section is half-hidden behind a scrollbar; the
   inspector itself collapses to a rail and remembers that across reloads. An empty static
@@ -145,15 +147,15 @@ guide says which visible controls do what.
 
 | Tool | What it does |
 |---|---|
-| `k7art-read` | Both surfaces — the label's coordinate space, fields, roles and type pairs, and the J-card's sheet, parts, fields and sizes — the open K7Arts, the active surface, layers, mask, groups, selection and export errors. |
+| `k7art-read` | Both surfaces — the label's coordinate space, fields, each layer's colour and type pairs, and the J-card's sheet, parts, background, fields and sizes — the open K7Arts, the active surface, layers, mask, groups, selection and export errors. |
 | `k7art-guide` | The guide to designing a K7Art in one result — the print and the Card's window, the J-card sheet and its parts, the fields, the workflow, the refusals, and the visible-controls path. The same file is served at `/k7art/skill.md`; this is for a session that blocks routes. |
 | `k7art-add-layer` | Add a rect, square, circle or text on the active surface; on the J-card, a text is static unless it names `title`, `artist` or `meta`. |
-| `k7art-update-layer` | Change one layer's surface, position, size, rotation, text or field, role, font role, alignment, name, test value or lock. |
+| `k7art-update-layer` | Change one layer's surface, position, size, rotation, text or field, colour, font role, alignment, name, test value or lock. |
 | `k7art-delete-layer` | Delete a layer. |
 | `k7art-select-layer` | Select layers, so the person at the screen sees what the agent is working on. |
 | `k7art-move-layer` | Raise, lower, or send a layer to the top or bottom of the stack. |
 | `k7art-group-layers` | Group the selection, or ungroup it. |
-| `k7art-set-design` | The K7Art's id and name, its shared ink, rule, eight bands and paper, the label's canvas cycle and preview, a type role's face and size (the label's compiled pair, the J-card's size), and the J-card's sheet. |
+| `k7art-set-design` | The K7Art's id and name, the label's mask colour and radius, the label's canvas cycle and preview, a type role's face and size (the label's compiled pair, the J-card's size), and the J-card's background. |
 | `k7art-set-field-value` | Set what a Slot (the label) or a J-card field previews. |
 | `k7art-import-template` | Open a K7Art object (or JSON text) in a new document, with the packer's refusals; a `label-template v1` file is migrated. |
 | `k7art-export-template` | Return the active or a named K7Art as `k7art v1` plus the errors that would stop an export. |
@@ -171,7 +173,7 @@ await window.__k7artMcp.call("k7art-add-layer", {
   text: "Side A",
   x: 40,
   y: 300,
-  role: "band.6",
+  color: "#b9ac8e",
 });
 const tools = window.__k7artMcp.tools();   // name, description, inputSchema
 const status = window.__k7artMcp.status(); // { available, via, registered, tools }
@@ -236,8 +238,8 @@ and seven prompts to paste (three of them built and pictured).
 
 Give it to an agent that can drive WebMCP — Chrome with `--enable-features=WebMCP`, or any
 desktop client over the MCP bridge below — and describe the label you want. The agent reads the
-design, lays out paper, bands and type, binds the fields, validates, and hands back the exported
-JSON.
+design, lays out the mask, its layers' colours and type, binds the fields, validates, and hands
+back the exported JSON.
 
 ### From a desktop client: the MCP bridge
 
@@ -294,15 +296,15 @@ await __k7artMcp.call("k7art-document", { action: "new", name: "HOLA Test" });
 await __k7artMcp.call("k7art-set-design", {
   templateId: "label.test-hola",
   name: "HOLA Test",
-  paper: "#c7a867",
-  paperRadius: 12,
+  maskColor: "#c7a867",
+  maskRadius: 12,
 });
 await __k7artMcp.call("k7art-add-layer", {
-  type: "rect", x: 0, y: 0, width: 748, height: 359, role: "band.7",
+  type: "rect", x: 0, y: 0, width: 748, height: 359, color: "#2f4b3a",
 });
 await __k7artMcp.call("k7art-add-layer", {
   type: "text", text: "HOLA", x: 274, y: 140, width: 200,
-  role: "band.6", fontRole: "numeral", align: "center",
+  color: "#b9ac8e", fontRole: "numeral", align: "center",
 });
 await __k7artMcp.call("k7art-export-template", {});
 ```
@@ -323,8 +325,7 @@ await __k7artMcp.call("k7art-export-template", {});
 - Uploaded fonts preview in the DOM but LVGL only draws a host font once it has been registered
   with the module, which happens on upload; a font the sheet does not compile cannot be
   exported (Export says so).
-- A label that predates the eight-band colourway re-exports with its band array padded to eight,
-  exactly as the one-page builder did: the panel needs a colour for every band. The designs that
-  already carry eight (`k7.neon`, `k7.retro`) round-trip byte for byte.
+- A v1 K7Art or a stored v1 document is migrated when it opens: its eleven inks resolve each
+  layer's role to the colour it had, and Export writes the v2 file.
 - The J-card's flap is authored and exported but drawn nowhere yet; the webapp has surfaces for
   its cover and spine only (ADR 0110).
