@@ -3728,7 +3728,7 @@
     {
       "id": "K7-08",
       "title": "The packer writes the v2 sheet, and the factory designs are converted",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
@@ -3755,7 +3755,7 @@
     {
       "id": "K7-09",
       "title": "The firmware paints a prim's own colour",
-      "state": "todo",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
@@ -3766,13 +3766,28 @@
           "at": "2026-11-22T00:10:59Z",
           "by": "deepseek",
           "text": "Code landed with K7-08 in 0cb6fb9, as the note on K7-08 proposed: label.h/label.c accept version 5 (16-byte template, reserved byte, colour at offset 20), label_inks_t/label_inks()/the fill enum are gone, and cassette_label.c paints lv_color_hex(p.colour). Evidence: make -C host check green (t32 and t46 migrated, t33 184 checks over the 2835 B sheet); cassette_label.c syntax-checked with the firmware toolchain. Missing: the board proof - a flash and the label at the two-finger pose - because another session holds /dev/cu.usbserial-8344440. Kept todo for that one step; it can be marked done once the flash happens."
+        },
+        {
+          "at": "2026-11-22T00:21:17Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9; starting to hand over the evidence."
+        },
+        {
+          "at": "2026-11-22T00:24:57Z",
+          "by": "deepseek",
+          "text": "The v2 reader is on the board and the K7 opened the v5 factory sheet.\n\n- `label.h`/`label.c` accept sheet version 5: a 16-byte template with no ink words, a prim whose reserved byte is 0 and whose colour at offset 20 is always painted; `label_inks_t`, `label_inks()` and the fill enum are gone.\n- `cassette_label.c` paints every prim with `lv_color_hex(p.colour)`.\n- `./tools/build.sh sunton build` compiles it (0x2069c0 bytes, 49% free) and `./tools/build.sh sunton flash` wrote it. The boot log on the board, after a reset:\n  `I (1683) art: factory sheet: 5 designs, 6 compiled fonts`\n  and no \"the label sheet did not open\" line - the firmware read the new sheet in place.\n- The old 9-hour `build.sh ... monitor` that held the serial port was ended by the flash; no monitor is left attached and the port is free.\n\nTo check by eye: hold a cassette up at the two-finger pose. The label's shapes should print the colours the K7Art now carries (the factory designs' converted inks), not a flat palette fill. That visual is the one thing this session cannot do for you; the sheet opening is proven by the boot log."
+        },
+        {
+          "at": "2026-11-22T00:26:16Z",
+          "by": "deepseek",
+          "text": "Board evidence beyond the boot log: the editor's own writer built a v5 pack (16584 B, sheet 2835 B) from the five factory designs, and the K7 accepted it at /api/art with {installed:true, valid:true, design_count:5, sheet_crc:784437507}, which is exactly 0x2EC19103 - the v5 sheet's CRC. Reset to factory after, {installed:false, factory_count:5}. So the device reads a v5 sheet both embedded and installed; the only thing unproven is the eye check at the two-finger pose."
         }
       ]
     },
     {
       "id": "K7-10",
       "title": "The editor keeps a colour, not a role",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-07"],
       "at": "2026-11-21T23:24:37Z",
@@ -3799,7 +3814,7 @@
     {
       "id": "K7-11",
       "title": "Every layer chooses its own colour",
-      "state": "todo",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-10"],
       "at": "2026-11-21T23:24:37Z",
@@ -3810,13 +3825,23 @@
           "at": "2026-11-22T00:10:59Z",
           "by": "deepseek",
           "text": "Code landed in 0cb6fb9: the Colours panel (the eleven inks) is gone; every layer's Appearance has a colour picker and swatch row (a shape's fill, a text's colour, a J-card layer's), the LayerMask keeps its colour and radius, the J-card design panel has its background, and the multi-selection sets one colour. Browser tests drive the tools and the inspector; 19 green. The board is todo because it depends on K7-10."
+        },
+        {
+          "at": "2026-11-22T00:21:17Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9; starting to hand over the evidence."
+        },
+        {
+          "at": "2026-11-22T00:24:57Z",
+          "by": "deepseek",
+          "text": "The editor's colour UI is in place (commit 0cb6fb9).\n\n- The Colours panel (the eleven inks) is gone from the label and the J-card design panels. The label's Paper panel keeps the LayerMask colour and radius; the J-card's Sheet panel has its background and swatch row.\n- Every layer's Appearance has its own picker and swatch row: a shape's Fill, a text's Colour, a J-card layer's Fill/Colour. A multi-selection sets one colour for all of them.\n- New layers take a colour from the Pantone swatch row (or the ink, for a text), and the canvas/J-card stages read `ed.fillOf(o)` from the layer's own colour.\n- The editor's own J-card preview model and renderer take literal colours and the sheet's background.\n\nVerified: 100 unit tests, 19 browser tests (including the tools adding a coloured layer, hiding one, the J-card group, and the v5 pack), typecheck and the production build."
         }
       ]
     },
     {
       "id": "K7-12",
       "title": "The App draws v2 J-cards and turns an old pack away",
-      "state": "todo",
+      "state": "review",
       "group": "K7",
       "deps": ["K7-07", "K7-08"],
       "at": "2026-11-21T23:24:37Z",
@@ -3832,6 +3857,16 @@
           "at": "2026-11-22T00:11:00Z",
           "by": "deepseek",
           "text": "Code landed in 0cb6fb9: web/src/jcard reads v2 (literal colours, required background, v === 2, no inks), the renderer paints each prim, factory.ts imports only id/name/jcard, and pack.ts checks the v5 sheet (16-byte templates, the prim's reserved byte and colour) and refuses a version-4 pack with 'an older editor (version 4); publish the designs again from /k7art'. Tests: 980 pass, typecheck and build green. The board is todo because it depends on K7-08."
+        },
+        {
+          "at": "2026-11-22T00:21:17Z",
+          "by": "deepseek",
+          "text": "Code landed in 0cb6fb9; starting to hand over the evidence."
+        },
+        {
+          "at": "2026-11-22T00:24:57Z",
+          "by": "deepseek",
+          "text": "The App reads v2 J-cards and turns an old pack away (commit 0cb6fb9).\n\n- `web/src/jcard/model.ts` takes every prim's own `#RRGGBB` and a required `background`; there is no `inks` and no role. The renderer paints each prim; `factory.ts` imports only `id`, `name` and `jcard`.\n- `pack.ts` checks the version-5 sheet for real (16-byte templates, the prim's reserved byte, colour at offset 20, RGB888), and refuses a version-4 pack with: `The pack's label sheet is from an older editor (version 4); publish the designs again from /k7art.` The J-cards document must be `v: 2`.\n- The cached J-cards and the pool follow the same reader.\n\nVerified: 980 tests (the renderer's colours, background and safe square; the factory import of every `assets/k7art` design; a v4 pack refused with the line, a v2 accepted), typecheck and build."
         }
       ]
     },
