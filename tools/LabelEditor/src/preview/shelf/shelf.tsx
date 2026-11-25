@@ -309,6 +309,9 @@ function Faces({ design, fields }: { design: JcardDesign; fields: JcardFields })
       </span>
       <span className="k7-face k7-side k7-left" aria-hidden="true">
         <Jcard design={design} fields={fields} part="spine" />
+        {/* The App's shelf reads a spine through the 65% overlay (k7art.md §5); the preview
+            is that shelf, so the design's spine takes the same read. */}
+        <span className="absolute inset-0" style={{ background: "rgb(0 0 0 / 0.65)" }} />
         <span className="k7-frame" />
         <span className="k7-sheen" aria-hidden="true" />
       </span>

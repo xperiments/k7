@@ -680,19 +680,25 @@ function CaseSpine({ album }: { album: Album }) {
   const design = useJcardDesign(album.album, artist);
   if (!album.cover && design) {
     return (
-      <Jcard
-        design={design}
-        fields={{
-          title: album.album,
-          artist,
-          meta: DEFAULT_META,
-          song_title: album.album,
-          song_artist: artist,
-          song_album: album.album,
-          genre: album.rows[0]?.genre ?? '',
-        }}
-        part="spine"
-      />
+      <>
+        <Jcard
+          design={design}
+          fields={{
+            title: album.album,
+            artist,
+            meta: DEFAULT_META,
+            song_title: album.album,
+            song_artist: artist,
+            song_album: album.album,
+            genre: album.rows[0]?.genre ?? '',
+          }}
+          part="spine"
+        />
+        {/* A picture case's spine is the picture under the left face's 65% read. A J-card's
+            spine is the design's own colour, so without the same read it is the one bright
+            spine on the shelf (k7art.md §5). */}
+        <span className="absolute inset-0" style={{ background: 'rgb(0 0 0 / 0.65)' }} />
+      </>
     );
   }
   return (
