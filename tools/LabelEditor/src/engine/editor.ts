@@ -47,6 +47,7 @@ import {
   type ScaleFrame,
   type ScaleMember,
 } from "./scale";
+import { faceUrl, publicAsset } from "./assets";
 import type {
   Doc,
   DocData,
@@ -359,16 +360,21 @@ export class Editor {
   async loadFonts() {
     await Promise.all(
       BUILTIN_FONTS.map(async (f) => {
+        const url = faceUrl(f.file);
         try {
-          const res = await fetch(`./fonts/${f.file}`);
+          const res = await fetch(url);
           if (!res.ok) throw new Error(`${res.status}`);
           const buf = new Uint8Array(await res.arrayBuffer());
-          this.fonts.push({ name: f.name, role: f.role, file: f.file, buf, id: 0 });
+          // The face has to parse before it is the page's and the preview's. A resource the
+          // browser refuses (HTML where a font was expected) would otherwise be registered
+          // as the design's type and drawn at the fallback's metrics, which is the drift the
+          // editor exists to prevent: the canvas would no longer be the sheet's type.
           const face = new FontFace(f.name, buf.slice().buffer as ArrayBuffer);
+          await face.load();
           document.fonts.add(face);
-          await face.load().catch(() => {});
+          this.fonts.push({ name: f.name, role: f.role, file: f.file, buf, id: 0 });
         } catch (err) {
-          console.warn(`font ${f.name} unavailable`, err);
+          console.warn(`font ${f.name} unavailable at ${url}`, err);
         }
       }),
     );
@@ -1460,7 +1466,7 @@ export class Editor {
   // ---- the LVGL preview: real LVGL (v9.6) compiled to WebAssembly ----
   async loadLvgl() {
     try {
-      await loadScript(`${import.meta.env.BASE_URL}lvgl.js`);
+      await loadScript(publicAsset("lvgl.js"));
       const create = (window as unknown as { createLvgl?: () => Promise<any> }).createLvgl;
       if (!create) throw new Error("createLvgl missing");
       const m = await create();
