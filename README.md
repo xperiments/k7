@@ -46,6 +46,7 @@ rate and encoded to MP3 for the stream.
 - [The card](#the-card)
 - [Hardware: pins, button, PSRAM](#hardware-pins-button-psram)
 - [Using it](#using-it)
+- [Home Assistant](#home-assistant)
 - [Measured music: the Snapshot](#measured-music-the-snapshot)
 - [Host build and tests (no board needed)](#host-build-and-tests-no-board-needed)
 - [Two-tier acceptance: host and board](#two-tier-acceptance-host-and-board)
@@ -321,6 +322,16 @@ curl -s -o /dev/null -w '%{http_code}\n' http://192.168.1.42/music/track.flac   
 # Previous / next track
 #   the control API only: the screen's chrome has no transport buttons
 ```
+
+### Home Assistant
+
+Home Assistant can show the deck as a media player — play, next and previous, and no control the
+broadcast cannot honour — with one `rest` sensor, three `rest_command`s and a `template`
+`media_player`: no broker, no token, no integration. The configuration to paste, the deck's own
+name in place of `k7.local`, and the `id` that keeps the entity's identity across renames and
+leases are in [`docs/home-assistant.md`](docs/home-assistant.md).
+MQTT cannot give the deck a media player at all: Home Assistant has no MQTT media-player platform,
+so a broker would buy every entity except the one worth having.
 
 ### Station format
 

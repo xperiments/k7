@@ -159,11 +159,19 @@ has **both directions**:
   a proxy in front of anything that only speaks stdio
   ([docs](https://www.home-assistant.io/integrations/mcp/)).
 
-So the most plausible buyer of xtape's MCP surface runs a client that wants **SSE**, while
-xtape serves **stateless POST** and returns 405 on GET. Unless HA's client has since grown
-streamable-HTTP support (the docs I fetched on 2026-10-30 still describe SSE), **xtape's
-`/mcp` does not connect to Home Assistant without an adapter.** That is a concrete, fixable,
-and currently unfixed integration gap — and it is a better use of a week than another tool.
+**Correction (2026-11-24):** Home Assistant's MCP client has preferred **Streamable HTTP** over SSE
+since 2026.2 (PR [#161547](https://github.com/home-assistant/core/pull/161547)), so xtape's stateless
+POST `/mcp` *is* its shape and it connects. What it buys is smaller than it looks: an MCP client
+creates no entities, so the dashboard player people actually want comes from `rest`/`template`
+with no firmware change — [`../../home-assistant.md`](../../home-assistant.md) and the research
+[`../home-assistant-feasibility.md`](../home-assistant-feasibility.md) settle it.
+
+> **The original claim, kept as the record of what was believed when this note was written:**
+> So the most plausible buyer of xtape's MCP surface runs a client that wants **SSE**, while xtape
+> serves **stateless POST** and returns 405 on GET. Unless HA's client has since grown
+> streamable-HTTP support (the docs I fetched on 2026-10-30 still describe SSE), **xtape's `/mcp`
+> does not connect to Home Assistant without an adapter.** That is a concrete, fixable, and
+> currently unfixed integration gap — and it is a better use of a week than another tool.
 
 Home Assistant's install base is the relevant denominator for any integration-led angle:
 **715,424 active installations** reporting analytics

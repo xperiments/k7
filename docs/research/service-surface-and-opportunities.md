@@ -134,7 +134,10 @@ This is the part that most resembles a "scan database", and it is deliberately m
 
 **Which clients actually connect** (`docs/research/server/s13-library-tree-and-mcp.md:966-976`):
 MCP Inspector and Claude Code yes; **Claude Desktop no** — its local config is stdio-only, so it
-needs a bridge; Cursor unverified. And the Home Assistant client is **SSE-only** (see B2).
+needs a bridge; Cursor unverified. Home Assistant's MCP client preferred **Streamable HTTP** over
+SSE from 2026.2, so it can reach this endpoint; the claim that it could not is corrected in
+[`home-assistant-feasibility.md`](home-assistant-feasibility.md), which also shows that an MCP client
+creates no entities — the entity comes from the recipe there, not from this surface.
 
 ## A5. Three sharp edges found while verifying
 
@@ -243,11 +246,13 @@ brand channels are where revenue lives.**
 - **Adoption is real and server-side.** 10,000+ public MCP servers and 87M+ weekly downloads of
   the TypeScript SDK ([EXTERNAL][anthropic-mcp]) — i.e. the *client* side is free and universal,
   which makes MCP table stakes, not differentiation.
-- **The most likely consumer cannot connect.** Home Assistant's MCP client integration takes an
-  "SSE Server URL" and polls an SSE endpoint ([EXTERNAL][ha-mcp]); this server returns 405 on GET
-  and speaks no SSE. HA reports 715,424 active installations and 3% of them run that integration
-  ([EXTERNAL][ha-analytics]) — so the integration gap is concrete, and fixing it is a week of
-  bridge work, not a research project.
+- **The most likely consumer can connect, and gets no entities for it.** Home Assistant's MCP
+  client has preferred Streamable HTTP since 2026.2 (PR
+  [#161547](https://github.com/home-assistant/core/pull/161547)), which is this endpoint's shape —
+  but the client hands tools to a conversation agent and creates no entities. The entity people
+  want is a `media_player`, and it comes from `rest`/`template` with no firmware change, worked out
+  in [`home-assistant-feasibility.md`](home-assistant-feasibility.md). HA reports 715,424 active
+  installations ([EXTERNAL][ha-analytics]).
 - **Claude Desktop cannot connect either**, for a different reason: its local config is stdio-only.
 
 **Verdict: MCP is a distribution hook and a demo, not a purchase driver.** There is no survey, no
