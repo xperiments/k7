@@ -7,6 +7,8 @@
  */
 #include "player_net.h"
 
+#include "device_name.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -187,13 +189,23 @@ static void enter_failing(uint32_t now)
              (unsigned)(PLAYER_NET_RETRY_MS / 1000), (unsigned)(PLAYER_NET_SWEEP_MS / 1000));
 }
 
-/* The K7's address: the name first, because a moved lease is invisible to a name, and the
- * record's address second (H36, R19). */
+/* One name, if it resolves. */
+static bool resolve_name(const char *name, char *out, size_t cap)
+{
+    out[0] = '\0';
+    return name && name[0] && player_board_resolve(name, out, cap) && out[0];
+}
+
+/* The K7's address: the name the record gave it first, because a moved lease is invisible to
+ * a name; then the product's bare name, which a deck named after this handover keeps as an
+ * alias; then the record's address (H36, R19, ADR 0118). */
 static void resolve_host(void)
 {
     char ip[40] = "";
-    const char *name = M.rec.host[0] ? M.rec.host : "k7";
-    if (player_board_resolve(name, ip, sizeof ip) && ip[0]) {
+    bool found = resolve_name(M.rec.host, ip, sizeof ip);
+    if (!found && strcmp(M.rec.host, DEVICE_NAME_PRODUCT) != 0)
+        found = resolve_name(DEVICE_NAME_PRODUCT, ip, sizeof ip);
+    if (found) {
         snprintf(M.host, sizeof M.host, "%s", ip);
     } else if (M.network == 1) {
         /* The setup network is always at 192.168.4.1 (H35); the record's address describes

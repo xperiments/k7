@@ -20,6 +20,9 @@
 extern void host_player_reset(void);
 extern void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int reason);
 extern void host_player_resolve(const char *ip);
+extern void host_player_resolves(const char *name, const char *ip);
+extern int host_player_asked_count(void);
+extern bool host_player_asked(int at, char *out, size_t cap);
 extern void host_player_drop(void);
 extern bool host_player_deliver_beacon(const uint8_t mac[6], const uint8_t pub[HO_KEY_LEN]);
 extern bool host_player_deliver_record(const uint8_t *frame, size_t len);
@@ -310,10 +313,93 @@ static void test_record_survives(void)
     CHECK(st.state == PLAYER_NET_CONNECTING, "and goes straight to joining");
 }
 
+/* ------------------------------------------------------------------ the lookup order */
+
+/* A record delivered after an ask, then the join the record starts. */
+static void connect_with_record(const char *name, uint32_t ipv4)
+{
+    host_player_wifi_script(k_home, true, 0, 0);
+    player_net_init();
+    player_net_tick(0);
+
+    uint8_t pub[HO_KEY_LEN];
+    k7_key(pub);
+    CHECK(host_player_deliver_beacon(k_k7, pub), "a beacon arrives");
+    player_net_tick(100);
+
+    ho_record_t rec = a_record(true, true);
+    snprintf(rec.host, sizeof rec.host, "%s", name ? name : "");
+    rec.ipv4 = ipv4;
+    uint8_t bytes[HO_RECORD_MAX];
+    size_t n = ho_record_encode(&rec, bytes, sizeof bytes);
+    CHECK(host_player_deliver_record(bytes, n), "the record arrives");
+    player_net_tick(200);
+    player_net_tick(250);
+}
+
+static const char *asked(int at)
+{
+    static char out[64];
+    return host_player_asked(at, out, sizeof out) ? out : "(none)";
+}
+
+/* R19, ADR 0118: the record's name first, then the product's bare name, then the address. */
+static void test_lookup_order(void)
+{
+    player_net_status_t st;
+
+    /* The name resolves: it is asked alone, and the record's dead address is never needed. */
+    host_player_reset();
+    host_player_resolves("k7-kitchen", "192.168.0.14");
+    connect_with_record("k7-kitchen", 0xC0A80063); /* the recorded 192.168.0.99 is dead */
+    player_net_status(&st);
+    CHECK(strcmp(st.host, "192.168.0.14") == 0, "the record's name wins: %s", st.host);
+    CHECK_EQ(host_player_asked_count(), 1, "and nothing else is asked");
+    CHECK(strcmp(asked(0), "k7-kitchen") == 0, "the first ask is the record's name");
+
+    /* The deck was named after the handover: the record says k7, and k7 answers as the
+     * alias on the deck's new lease. This is the case the ticket exists for. */
+    host_player_reset();
+    host_player_resolves("k7", "192.168.0.15");
+    connect_with_record("k7", 0xC0A80063);
+    player_net_status(&st);
+    CHECK(strcmp(st.host, "192.168.0.15") == 0, "the alias finds the renamed deck: %s", st.host);
+
+    /* The record's name does not answer: the product's bare name is asked second. */
+    host_player_reset();
+    host_player_resolves("k7", "192.168.0.16");
+    connect_with_record("k7-kitchen", 0);
+    player_net_status(&st);
+    CHECK(strcmp(st.host, "192.168.0.16") == 0, "the product's name is the second ask: %s",
+          st.host);
+    CHECK_EQ(host_player_asked_count(), 2, "two names were asked");
+    CHECK(strcmp(asked(0), "k7-kitchen") == 0, "the record's first");
+    CHECK(strcmp(asked(1), "k7") == 0, "and the product's second");
+
+    /* A record written before names existed carries the bare product name (the format
+     * refuses an empty hostname, H37), so it behaves exactly as it always did: one ask. */
+    host_player_reset();
+    host_player_resolves("k7", "192.168.0.17");
+    connect_with_record("k7", 0);
+    player_net_status(&st);
+    CHECK(strcmp(st.host, "192.168.0.17") == 0, "an old record is found by k7: %s", st.host);
+    CHECK_EQ(host_player_asked_count(), 1, "with one ask, not two");
+    CHECK(strcmp(asked(0), "k7") == 0, "for the product's name");
+
+    /* Nothing resolves: the record's address is the last resort, after both names. */
+    host_player_reset();
+    connect_with_record("k7-kitchen", 0xC0A8000D);
+    player_net_status(&st);
+    CHECK(strcmp(st.host, "192.168.0.13") == 0, "the dead name falls back to the address: %s",
+          st.host);
+    CHECK_EQ(host_player_asked_count(), 2, "after both names were tried");
+}
+
 int main(void)
 {
     test_sweep();
     test_asks_and_stores();
+    test_lookup_order();
     test_bad_record();
     test_home_fails_then_ap();
     test_alternation();

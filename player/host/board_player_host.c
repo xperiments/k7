@@ -39,6 +39,19 @@ static ho_record_t s_record;
 
 static char s_resolve_ip[32];
 
+/* A scripted resolver: each name with the answer it gives, and every name asked, in order.
+ * The player's lookup order is a fact a test can only read if it knows which names were
+ * asked; one answer for every name cannot tell the first ask from the second (HA-05). */
+#define HOST_RESOLVE_MAX 8
+typedef struct {
+    char name[64];
+    char ip[32];
+} host_answer_t;
+static host_answer_t s_answers[HOST_RESOLVE_MAX];
+static int s_answers_n;
+static char s_asked[HOST_RESOLVE_MAX][64];
+static int s_asked_n;
+
 static player_board_frame_fn s_frame_cb;
 static player_board_packet_fn s_audio_cb;
 static player_board_packet_fn s_tone_cb;
@@ -82,6 +95,8 @@ void host_player_reset(void)
     s_has_record = false;
     memset(&s_record, 0, sizeof s_record);
     s_resolve_ip[0] = '\0';
+    s_answers_n = 0;
+    s_asked_n = 0;
     s_now_on = false;
     s_frame_cb = NULL;
     s_channel = 0;
@@ -121,6 +136,23 @@ void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int rea
 void host_player_resolve(const char *ip)
 {
     snprintf(s_resolve_ip, sizeof s_resolve_ip, "%s", ip ? ip : "");
+}
+
+void host_player_resolves(const char *name, const char *ip)
+{
+    if (!name || s_answers_n >= HOST_RESOLVE_MAX) return;
+    snprintf(s_answers[s_answers_n].name, sizeof s_answers[0].name, "%s", name);
+    snprintf(s_answers[s_answers_n].ip, sizeof s_answers[0].ip, "%s", ip ? ip : "");
+    s_answers_n++;
+}
+
+int host_player_asked_count(void) { return s_asked_n; }
+
+bool host_player_asked(int at, char *out, size_t cap)
+{
+    if (!out || at < 0 || at >= s_asked_n) return false;
+    snprintf(out, cap, "%s", s_asked[at]);
+    return true;
 }
 
 void host_player_drop(void)
@@ -251,8 +283,16 @@ void player_board_wifi_state(player_board_wifi_t *out)
 
 bool player_board_resolve(const char *hostname, char *out, size_t cap)
 {
-    (void)hostname;
     if (!out || cap == 0) return false;
+    if (s_asked_n < HOST_RESOLVE_MAX)
+        snprintf(s_asked[s_asked_n++], sizeof s_asked[0], "%s", hostname ? hostname : "");
+    /* A scripted name answers only itself, so a test can make one resolve and another not;
+     * with no script, one address answers every name, as it always has. */
+    for (int i = 0; i < s_answers_n; i++) {
+        if (strcmp(s_answers[i].name, hostname ? hostname : "") != 0) continue;
+        snprintf(out, cap, "%s", s_answers[i].ip);
+        return s_answers[i].ip[0] != '\0';
+    }
     snprintf(out, cap, "%s", s_resolve_ip);
     return s_resolve_ip[0] != '\0';
 }

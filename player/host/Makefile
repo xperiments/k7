@@ -25,6 +25,7 @@ LDLIBS := -lpthread -lm
 
 INC := -I$(PLAYER)/components/player/include \
        -I$(ROOT)/components/portable/handover/include \
+       -I$(ROOT)/components/portable/device_name/include \
        -I$(ROOT)/components/portable/espnow_stream/include \
        -I$(ROOT)/components/portable/tone_eq/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -51,6 +52,11 @@ HANDOVER_SRC := $(ROOT)/components/portable/handover/handover_frame.c \
                 $(ROOT)/components/portable/handover/handover_key.c
 HANDOVER_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(HANDOVER_SRC)))
 
+# The deck's name rules, shared with the K7 (device_name.h): the player resolves the name
+# the record gave it, so it reads the same rule the K7 writes.
+DEVICE_SRC := $(ROOT)/components/portable/device_name/device_name.c
+DEVICE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(DEVICE_SRC)))
+
 TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t04_output \
          $(BIN)/t05_light $(BIN)/t06_recv $(BIN)/t07_tone
 
@@ -58,27 +64,27 @@ TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t04_output \
 
 all: $(TESTS)
 
-$(BIN)/t01_status: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t01_status.o
+$(BIN)/t01_status: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t01_status.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t02_net: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t02_net.o
+$(BIN)/t02_net: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t02_net.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t04_output: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t04_output.o
+$(BIN)/t04_output: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t04_output.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t06_recv: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t06_recv.o
+$(BIN)/t06_recv: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t06_recv.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t07_tone: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t07_tone.o
+$(BIN)/t07_tone: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t07_tone.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t05_light: $(CORE_OBJ) $(HANDOVER_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t05_light.o
+$(BIN)/t05_light: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t05_light.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
@@ -89,7 +95,8 @@ $(OBJ)/%.o: %.c
 
 vpath %.c $(PLAYER)/components/player \
             $(ROOT)/components/portable/espnow_stream $(ROOT)/components/portable/tone_eq \
-            $(ROOT)/components/portable/handover $(HERE) $(ROOT)/host/shim $(HERE)/tests
+            $(ROOT)/components/portable/handover $(ROOT)/components/portable/device_name \
+            $(HERE) $(ROOT)/host/shim $(HERE)/tests
 -include $(wildcard $(OBJ)/*.d)
 
 test: $(TESTS)

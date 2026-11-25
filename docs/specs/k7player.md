@@ -101,9 +101,12 @@ K7's own network is joined with the setup password from the record; there is no 
 ([`wifi-provisioning.md`](./wifi-provisioning.md), P29), so a wrong password is not retried for
 ever.
 
-**R19. The K7 is found by `k7.local` first and by the record's IPv4 second.** A moved DHCP lease
-is therefore invisible to the player as long as mDNS answers; the address is the fallback for a
-network whose mDNS does not.
+**R19. The K7 is found by its name first, by the product's bare name second, and by the
+record's IPv4 last.** The record carries the name the K7 had when it was handed over —
+`k7-<word>` once the deck is named, `k7` before that — and the lookup asks it first, then
+`k7`, which a named deck keeps answering as an alias (ADR 0118), then the address. A moved DHCP
+lease is therefore invisible to the player as long as mDNS answers; the address is the fallback
+for a network whose mDNS does not.
 
 **R20. The recovery alternation is 20 s of retrying, then 10 s of sweeping, for as long as the
 player is failing.** It cannot sweep while it is connected, because the stream is on the channel
