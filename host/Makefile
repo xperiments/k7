@@ -215,7 +215,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
          $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
          $(BIN)/t43_espnow_stream $(BIN)/t44_espnow_emitter \
-         $(BIN)/t45_station_restart $(BIN)/t46_art_pack
+         $(BIN)/t45_station_restart $(BIN)/t46_art_pack $(BIN)/t49_name
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -410,6 +410,10 @@ $(BIN)/t45_station_restart: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t45_station_restart.o
 # The K7Art pack and the two-sheet pool: the pack header and CRC, the sheet at its
 # offset, the design-count agreement, the factory-first mapping and the fallback.
 $(BIN)/t46_art_pack: $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/t46_art_pack.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t49_name: $(OBJ)/board_host.o $(OBJ)/wifi_record.o $(OBJ)/shim.o $(OBJ)/t49_name.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

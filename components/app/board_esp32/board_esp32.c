@@ -196,6 +196,13 @@ const char *app_board_name(void)
     return "8048S050C";
 }
 
+/* The one value a rename changes; HA-04 reads the person's word into this and everything
+ * else - mDNS, the guard, the share record - follows. */
+const char *app_board_hostname(void)
+{
+    return APP_BOARD_HOSTNAME;
+}
+
 /* The station MAC, read from the efuse the radio already holds. Not from NVS: an
  * `erase_flash` wipes settings but not the MAC, and a home automation's entity must
  * survive that wipe rather than become a second device. */
@@ -516,7 +523,10 @@ esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *
     mdns_hostname_set(hostname);
     mdns_instance_name_set(hostname);
     char endpoint[96];
-    snprintf(endpoint, sizeof endpoint, "http://%s.local:%u%s", hostname, (unsigned)port, path);
+    /* The endpoint is the name's, built by the same helper a test can read, so the record
+     * cannot advertise an address the guard would refuse. */
+    if (!app_board_endpoint(endpoint, sizeof endpoint, port, path))
+        return ESP_ERR_INVALID_ARG;
     mdns_txt_item_t txt[] = {
         {"path", path},
         {"endpoint", endpoint},

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "app_board.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "http_server.h"
@@ -980,7 +981,11 @@ static bool origin_ok(const http_request_t *req)
     char local[32] = {0};
     if (L_local_ip) L_local_ip(local, sizeof local);
 
-    const char *const names[4] = {"xtape.local", "k7.local", "localhost", local};
+    /* The deck's own name, from the one value, beside the two fixed names that are not
+     * it: the product's old spelling and a native client's localhost. */
+    char deck[64] = {0};
+    if (!app_board_local_name(deck, sizeof deck)) deck[0] = '\0';
+    const char *const names[4] = {"xtape.local", deck, "localhost", local};
     for (int i = 0; i < 4; i++) {
         const char *name = names[i];
         if (!name[0]) continue;

@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "esp_err.h"
 #include "wifi_record.h"
@@ -98,6 +99,33 @@ esp_err_t app_board_setup_password_save(const char *password);
  * hands to a K7Player. One spelling, because a player that resolves a different one than
  * the device advertises is a player that cannot find it. */
 #define APP_BOARD_HOSTNAME "k7"
+
+/* The name the device answers to, read here and nowhere else: the mDNS host and instance,
+ * the endpoint its TXT record advertises, the name the MCP origin guard accepts, and the
+ * hostname the share record hands a K7Player. The product's word until a person names the
+ * deck; a rename is one change at this seam, not four. The host adapter reads
+ * `K7_HOSTNAME` so the host tier can move the one value and read what each consumer says. */
+const char *app_board_hostname(void);
+
+/* `<hostname>.local`: the name a browser or a player resolves. False when `out` cannot
+ * hold it. */
+static inline bool app_board_local_name(char *out, size_t out_size)
+{
+    if (!out || !out_size) return false;
+    int n = snprintf(out, out_size, "%s.local", app_board_hostname());
+    return n > 0 && (size_t)n < out_size;
+}
+
+/* The endpoint a browsed mDNS record carries, from the same name:
+ * `http://<hostname>.local:<port><path>`. */
+static inline bool app_board_endpoint(char *out, size_t out_size, uint16_t port,
+                                      const char *path)
+{
+    if (!out || !out_size || !path || !path[0]) return false;
+    int n = snprintf(out, out_size, "http://%s.local:%u%s", app_board_hostname(),
+                     (unsigned)port, path);
+    return n > 0 && (size_t)n < out_size;
+}
 
 /* How long the device tries its stored network at boot before the setup network appears
  * (wifi-provisioning.md P9). Not a tuning knob: it is the point where "the router is slow"

@@ -206,6 +206,15 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
 
 const char *app_board_name(void) { return "host"; }
 
+/* The one value, movable here so the host tier reads what every consumer says about a
+ * name it did not write. `K7_HOSTNAME` is a test seam, not a setting: the board reads its
+ * own name, and a person's word reaches it another way (HA-04). */
+const char *app_board_hostname(void)
+{
+    const char *name = getenv("K7_HOSTNAME");
+    return name && name[0] ? name : APP_BOARD_HOSTNAME;
+}
+
 /* No radio, so no MAC: a host is not a deck, and the status document says so rather than
  * inventing an address a home automation could key on. The value is a fixed twelve hex
  * characters, so a reader that requires the shape is still satisfied. */

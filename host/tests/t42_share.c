@@ -410,6 +410,34 @@ static void test_radio_refused(void)
     share_stop(2200);
 }
 
+/* The record's hostname is the deck's one name, read where the device keeps it: the window
+ * moves that name at the seam and the record a player receives says the moved one. */
+static void test_hostname_from_the_seam(void)
+{
+    fresh();
+    provision(true);
+    share_init();
+    setenv("K7_HOSTNAME", "kitchen", 1);
+
+    CHECK(share_start(1000), "a window opens on the moved name");
+    ho_request_t req;
+    request_for(0x10, &req);
+    uint8_t frame[HO_REQUEST_SIZE];
+    size_t n = ho_request_encode(&req, frame, sizeof frame);
+    CHECK(host_share_deliver(k_a, frame, n), "the player asks");
+    share_tick(1200);
+
+    sent_t f;
+    CHECK(sent_at(1, &f), "the record was captured");
+    ho_record_t rec;
+    CHECK(ho_record_decode(f.data, f.len, &rec), "and it decodes");
+    CHECK(strcmp(rec.host, "kitchen") == 0, "the record hands the player the seam's name, got %s",
+          rec.host);
+
+    share_stop(1200);
+    unsetenv("K7_HOSTNAME");
+}
+
 int main(void)
 {
     test_closed_by_default();
@@ -419,6 +447,7 @@ int main(void)
     test_expiry();
     test_stop();
     test_unprovisioned();
+    test_hostname_from_the_seam();
     test_radio_refused();
     TEST_END();
 }

@@ -9,6 +9,7 @@ request. This checks both builds, the preflight, and the MCP guard's answer to e
 Usage: origin_tests.py SERVER FIXTURES_DIR
 """
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -54,9 +55,9 @@ def free_port():
     return port
 
 
-def request(port, method, path, headers=None, body=None):
+def request(port, method, path, headers=None, body=None, host=None):
     headers = dict(headers or {})
-    header = f"{method} {path} HTTP/1.0\r\nHost: 127.0.0.1:{port}\r\n"
+    header = f"{method} {path} HTTP/1.0\r\nHost: {host or f'127.0.0.1:{port}'}\r\n"
     if body is not None:
         headers.setdefault("Content-Type", "application/json")
         header += f"Content-Length: {len(body)}\r\n"
@@ -89,11 +90,11 @@ def get(port, origin):
     return request(port, "GET", "/api/status", headers)
 
 
-def start(music, port, dev_origin=None):
+def start(music, port, dev_origin=None, env=None):
     args = [SERVER, "--music-dir", music, "--port", str(port)]
     if dev_origin:
         args += ["--app-origin-dev", dev_origin]
-    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
     deadline = time.time() + 15
     while time.time() < deadline:
         try:
@@ -194,9 +195,29 @@ def development():
         stop(proc)
 
 
+def named():
+    """The guard's accepted name is the deck's one name (HA-03). The server starts with the
+    name moved at the seam, and the origin it accepts moves with it: the old name is no
+    longer the deck's own, so it is refused like any other."""
+    env = dict(os.environ, K7_HOSTNAME="kitchen")
+    port = free_port()
+    proc = start(FIXTURES, port, env=env)
+    try:
+        # The page is served from the deck's name, so its origin and its Host are that name.
+        status, _, _ = request(port, "POST", "/mcp", {"Origin": "http://kitchen.local"},
+                               MCP_BODY, host="kitchen.local")
+        check("named: MCP accepts the moved name's origin", status, 200)
+        status, _, _ = request(port, "POST", "/mcp", {"Origin": "http://k7.local"}, MCP_BODY,
+                               host="k7.local")
+        check("named: and refuses the name it no longer answers", status, 403)
+    finally:
+        stop(proc)
+
+
 def main():
     shipping()
     development()
+    named()
     print(f"origins: {'FAILED' if FAIL else 'ok'} ({FAIL} failures)")
     return 1 if FAIL else 0
 

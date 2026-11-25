@@ -90,7 +90,8 @@ static bool build_record(const app_board_share_net_t *net, ho_record_t *rec)
     rec->has_ap = true;
     snprintf(rec->ap_ssid, sizeof rec->ap_ssid, "%s", SETUP_NETWORK_SSID);
     snprintf(rec->ap_pass, sizeof rec->ap_pass, "%s", net->ap_pass);
-    snprintf(rec->host, sizeof rec->host, "%s", APP_BOARD_HOSTNAME);
+    /* The name the player will resolve, from the one place the device keeps it. */
+    snprintf(rec->host, sizeof rec->host, "%s", app_board_hostname());
     rec->ipv4 = net->ipv4 ? net->ipv4 : SETUP_NETWORK_IPV4;
 
     uint8_t probe[HO_FRAME_MAX];
