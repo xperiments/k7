@@ -797,11 +797,18 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     if (report) report->files_up = true;
 
     /* 5b. The card state the App asks for. The device serves no page, so this is the
-     * only route the front door registers; `/` is the listener's 404. */
+     * only route the front door registers; `/` is the listener's 404. The deck's identity
+     * rides with it, read once: a status poll must not ask the radio, and an id the board
+     * cannot give is left empty so the document leaves the field out. */
+    char board_id[13] = {0};
+    (void)app_board_id(board_id, sizeof board_id);
     front_door_cfg_t door = {
         .card_present = front_door_card_present,
         .card_mark = front_door_card_mark,
         .rescan_running = app_services_rescan_running,
+        .id = board_id,
+        .fw = app_board_version(),
+        .board = app_board_name(),
     };
     e = front_door_start(&door);
     if (e != ESP_OK) return fail(report, e, "front door");

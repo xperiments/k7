@@ -31,12 +31,18 @@ static const char *TAG = "front_door";
 
 static front_door_cfg_t F;
 
+/* Which deck this is: copied at start, so the route reads values rather than calling the
+ * board while a connection waits. `id` is the station MAC as twelve hex characters. */
+static char F_id[13];
+static char F_fw[32];
+static char F_board[24];
+
 /* One allocation instead of the route's frames: the broadcast's own status struct carries
  * 1.4 KB of strings, and that plus this route is what overflowed a connection worker. The
  * body is built by a bounded writer, so the pieces no longer need buffers of their own. */
 typedef struct {
     mini_icecast_status_t st;
-    char body[1536];
+    char body[1664];
 } status_buffers_t;
 
 static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
@@ -80,6 +86,23 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
         json_puts(&w, "\"");
     } else {
         json_puts(&w, "null");
+    }
+    /* Which deck, which firmware, which board. The App ignores them; a home automation
+     * keys its entity on `id`, which names the deck where `mark` names the card. */
+    if (F_id[0]) {
+        json_puts(&w, ",\"id\":\"");
+        json_escaped(&w, F_id);
+        json_puts(&w, "\"");
+    }
+    if (F_fw[0]) {
+        json_puts(&w, ",\"fw\":\"");
+        json_escaped(&w, F_fw);
+        json_puts(&w, "\"");
+    }
+    if (F_board[0]) {
+        json_puts(&w, ",\"board\":\"");
+        json_escaped(&w, F_board);
+        json_puts(&w, "\"");
     }
     /* The choice and the walk are different facts: a card that is out keeps the choice (it
      * comes back with the card) while nothing is walking. */
@@ -159,6 +182,9 @@ esp_err_t front_door_start(const front_door_cfg_t *cfg)
 {
     if (!cfg) return ESP_ERR_INVALID_ARG;
     F = *cfg;
+    snprintf(F_id, sizeof F_id, "%s", cfg->id ? cfg->id : "");
+    snprintf(F_fw, sizeof F_fw, "%s", cfg->fw ? cfg->fw : "");
+    snprintf(F_board, sizeof F_board, "%s", cfg->board ? cfg->board : "");
 
     esp_err_t e = http_server_register_route("/api/status", status_route, NULL);
     if (e != ESP_OK) return e;

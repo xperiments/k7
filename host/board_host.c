@@ -206,6 +206,18 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
 
 const char *app_board_name(void) { return "host"; }
 
+/* No radio, so no MAC: a host is not a deck, and the status document says so rather than
+ * inventing an address a home automation could key on. The value is a fixed twelve hex
+ * characters, so a reader that requires the shape is still satisfied. */
+bool app_board_id(char *out, size_t out_size)
+{
+    if (!out || out_size < 13) return false;
+    snprintf(out, out_size, "%s", "000000000000");
+    return true;
+}
+
+const char *app_board_version(void) { return "host"; }
+
 void app_board_wait_online(void) { }
 
 bool app_board_local_ip(char *out, size_t out_size)

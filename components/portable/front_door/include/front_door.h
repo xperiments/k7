@@ -29,6 +29,13 @@ typedef struct {
     /* Whether a library rescan is running. The App's card shows its progress from this; the
      * panel's Menu already says "Rescanning..." from the same function. */
     bool (*rescan_running)(void);
+    /* Which deck this is, for a home automation that must tell two units apart: the station
+     * MAC as twelve lowercase hex characters, the running firmware's version, and the
+     * board's short name. Copied at start, so the strings need not outlive the call; an
+     * empty one leaves its field out of the document. */
+    const char *id;
+    const char *fw;
+    const char *board;
 } front_door_cfg_t;
 
 /* Register `/api/status`. Call before http_server_start(). */

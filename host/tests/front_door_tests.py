@@ -123,6 +123,18 @@ def main():
         check("it counts the fixture tracks", status_doc.get("tracks", 0) > 0, True)
         check("it reports what is playing", "playing" in status_doc, True)
 
+        # Which deck it is, so a home automation can key on it (HA-02). The status named the
+        # card's mark and never the board; the id is the radio's station MAC, twelve lowercase
+        # hex characters, and it is the same answer every time it is asked.
+        check("it names the board it runs on", status_doc.get("board"), "host")
+        check("with the firmware that is running", status_doc.get("fw"), "host")
+        deck_id = status_doc.get("id")
+        check("and a twelve-hex deck id",
+              isinstance(deck_id, str) and len(deck_id) == 12
+              and all(c in "0123456789abcdef" for c in deck_id), True)
+        again = json.loads(get(port, "/api/status")[3])
+        check("the deck id is the same on the next poll", again.get("id"), deck_id)
+
         status, _, _, _ = get(port, "/api/statuses")
         check("a longer path is not the status route", status, 404)
         status, _, _, _ = get(port, "/api/nope")

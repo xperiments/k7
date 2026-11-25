@@ -28,6 +28,18 @@ typedef struct {
  * adapters return "8048S050C" and "host" and never touch hardware here. */
 const char *app_board_name(void);
 
+/* The board's stable identity: its Wi-Fi station MAC as twelve lowercase hex characters,
+ * no separators. The card's mark (`k7.card`) names the card; this names the deck, and a
+ * home automation keys on it because it is the same on every boot and every re-flash that
+ * keeps the settings, and two boards never share it. Read from the radio, so a wiped
+ * `erase_flash` device still knows which deck it is. False when the radio cannot answer
+ * (the host adapter has none and says so with a fixed value instead). */
+bool app_board_id(char *out, size_t out_size);
+
+/* The running application's version, from the image's own descriptor. The host adapter
+ * runs no firmware image and answers "host". */
+const char *app_board_version(void);
+
 /* Bring the network stack up and start associating, without waiting. This must
  * happen before the services create sockets, and before the encoder takes its
  * internal RAM: esp_wifi_init() wants contiguous DMA-capable buffers. The port is

@@ -15,11 +15,13 @@
 
 #include "driver/sdspi_host.h"
 #include "driver/spi_common.h"
+#include "esp_app_desc.h"
 #include "esp_chip_info.h"
 #include "esp_event.h"
 #include "esp_flash.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_now.h"
 #include "esp_timer.h"
@@ -192,6 +194,25 @@ esp_err_t app_board_net_start(uint16_t http_port)
 const char *app_board_name(void)
 {
     return "8048S050C";
+}
+
+/* The station MAC, read from the efuse the radio already holds. Not from NVS: an
+ * `erase_flash` wipes settings but not the MAC, and a home automation's entity must
+ * survive that wipe rather than become a second device. */
+bool app_board_id(char *out, size_t out_size)
+{
+    uint8_t mac[6];
+    if (!out || out_size < 13) return false;
+    if (esp_read_mac(mac, ESP_MAC_WIFI_STA) != ESP_OK) return false;
+    snprintf(out, out_size, "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3],
+             mac[4], mac[5]);
+    return true;
+}
+
+const char *app_board_version(void)
+{
+    const esp_app_desc_t *desc = esp_app_get_description();
+    return desc && desc->version[0] ? desc->version : "unknown";
 }
 
 void app_board_wait_online(void)
