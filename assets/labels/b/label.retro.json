@@ -1,0 +1,227 @@
+{
+  "v": 1,
+  "id": "label.retro",
+  "name": "retro",
+  "space": {
+    "w": 748,
+    "h": 359
+  },
+  "slots": {
+    "song_title": {
+      "max": 96
+    },
+    "song_artist": {
+      "max": 96
+    },
+    "song_album": {
+      "max": 96
+    }
+  },
+  "inks": {
+    "paper": "#434342",
+    "ink": "#151515",
+    "rule": "#9c9c9c",
+    "band": [
+      "#9e2a35",
+      "#b58329",
+      "#789b3d",
+      "#3b8b7f",
+      "#3b6e8f",
+      "#7a3b52",
+      "#b9ac8e",
+      "#2f4b3a"
+    ]
+  },
+  "fonts": {
+    "title": {
+      "ff": "Archivo Narrow 600",
+      "px": 32
+    },
+    "numeral": {
+      "ff": "Barlow Condensed 700",
+      "px": 78
+    },
+    "caption": {
+      "ff": "IBM Plex Mono 500",
+      "px": 18
+    }
+  },
+  "prims": [
+    {
+      "t": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 748,
+      "h": 359,
+      "r": 10,
+      "fill": "paper",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 4,
+      "y": 4,
+      "w": 740,
+      "h": 351,
+      "r": 12,
+      "fill": "band.6",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 4,
+      "y": 142,
+      "w": 740,
+      "h": 42,
+      "fill": "band.1",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 4,
+      "y": 101,
+      "w": 740,
+      "h": 42,
+      "fill": "band.0",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 4,
+      "y": 184,
+      "w": 740,
+      "h": 42,
+      "fill": "band.2",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 4,
+      "y": 226,
+      "w": 740,
+      "h": 42,
+      "fill": "band.3",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 28,
+      "y": 310,
+      "w": 692,
+      "h": 2,
+      "fill": "rule",
+      "still": true
+    },
+    {
+      "t": "rect",
+      "x": 28,
+      "y": 343,
+      "w": 692,
+      "h": 2,
+      "fill": "rule",
+      "still": true
+    },
+    {
+      "t": "text",
+      "x": 64,
+      "y": 3,
+      "w": 38,
+      "font": "numeral",
+      "color": "ink",
+      "align": "left",
+      "text": "B"
+    },
+    {
+      "t": "text",
+      "x": 19,
+      "y": 23,
+      "w": 45,
+      "font": "caption",
+      "color": "ink",
+      "align": "left",
+      "text": "SIDE"
+    },
+    {
+      "t": "text",
+      "x": 626,
+      "y": 3,
+      "w": 71,
+      "font": "numeral",
+      "color": "ink",
+      "align": "left",
+      "text": "90"
+    },
+    {
+      "t": "rect",
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83,
+      "fill": "ink",
+      "still": true
+    },
+    {
+      "t": "text",
+      "slot": "song_title",
+      "x": 107,
+      "y": 272,
+      "w": 524,
+      "font": "title",
+      "color": "ink",
+      "align": "center",
+      "preview": "Neon Skyline"
+    },
+    {
+      "t": "text",
+      "x": 28,
+      "y": 286,
+      "w": 55,
+      "font": "caption",
+      "color": "ink",
+      "align": "left",
+      "text": "INDEX"
+    },
+    {
+      "t": "text",
+      "slot": "song_artist",
+      "x": 134,
+      "y": 14,
+      "w": 480,
+      "font": "title",
+      "color": "ink",
+      "align": "center",
+      "preview": "Albert Pla"
+    },
+    {
+      "t": "text",
+      "slot": "song_album",
+      "x": 134,
+      "y": 51,
+      "w": 480,
+      "font": "title",
+      "color": "ink",
+      "align": "center",
+      "preview": "Night Drive"
+    },
+    {
+      "t": "rect",
+      "x": 324,
+      "y": 52,
+      "w": 100,
+      "h": 2,
+      "fill": "rule",
+      "still": true
+    },
+    {
+      "t": "text",
+      "x": 698,
+      "y": 23,
+      "w": 34,
+      "font": "caption",
+      "color": "ink",
+      "align": "left",
+      "text": "MIN"
+    }
+  ]
+}
