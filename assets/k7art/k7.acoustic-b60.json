@@ -1,0 +1,341 @@
+{
+  "format": "k7art",
+  "v": 2,
+  "id": "k7.acoustic-b60",
+  "name": "Acoustic B60",
+  "label": {
+    "space": {
+      "w": 748,
+      "h": 359
+    },
+    "mask": {
+      "color": "#a4907a",
+      "r": 10
+    },
+    "aperture": {
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83
+    },
+    "canvas": {
+      "backgrounds": [
+        "#584537",
+        "#3e3935"
+      ],
+      "active": 1
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "px": 32
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "px": 78
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "px": 18
+      }
+    },
+    "slots": {
+      "song_title": {
+        "max": 96
+      },
+      "genre": {
+        "max": 96
+      },
+      "bpm": {
+        "max": 96
+      },
+      "musical_key": {
+        "max": 96
+      },
+      "song_album": {
+        "max": 96
+      },
+      "song_artist": {
+        "max": 96
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 0,
+        "w": 748,
+        "h": 10,
+        "fill": "#710d10",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 276,
+        "w": 748,
+        "h": 83,
+        "fill": "#473325",
+        "still": true
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 65,
+        "y": 12,
+        "w": 584,
+        "font": "title",
+        "color": "#473325",
+        "align": "center",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "genre",
+        "x": 522,
+        "y": 16,
+        "w": 214,
+        "font": "caption",
+        "color": "#473325",
+        "align": "right",
+        "preview": "Synthwave"
+      },
+      {
+        "t": "text",
+        "x": 26,
+        "y": 122,
+        "w": 38,
+        "font": "numeral",
+        "color": "#473325",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 67,
+        "y": 51,
+        "w": 595,
+        "font": "title",
+        "color": "#473325",
+        "align": "center",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "text",
+        "slot": "song_title",
+        "x": 24,
+        "y": 286,
+        "w": 480,
+        "font": "title",
+        "color": "#FAF9F5",
+        "align": "left",
+        "preview": "Neon Skyline"
+      },
+      {
+        "t": "text",
+        "slot": "bpm",
+        "x": 625,
+        "y": 21,
+        "w": 130,
+        "font": "numeral",
+        "color": "#473325",
+        "align": "center",
+        "preview": "124"
+      },
+      {
+        "t": "text",
+        "slot": "musical_key",
+        "x": 24,
+        "y": 326,
+        "w": 460,
+        "font": "caption",
+        "color": "#FAF9F5",
+        "align": "left",
+        "preview": "8A"
+      }
+    ]
+  },
+  "jcard": {
+    "space": {
+      "w": 1300,
+      "h": 1280,
+      "unit": 320
+    },
+    "parts": {
+      "flap": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 1280
+      },
+      "spine": {
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280
+      },
+      "cover": {
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 1280
+      }
+    },
+    "background": "#FAF9F5",
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "size": 56
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "size": 136
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "size": 31
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 40,
+        "w": 1300,
+        "h": 18,
+        "fill": "#F22229"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 530,
+        "w": 700,
+        "h": 10,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 556,
+        "w": 700,
+        "h": 10,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 582,
+        "w": 700,
+        "h": 10,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 608,
+        "w": 700,
+        "h": 10,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 634,
+        "w": 700,
+        "h": 10,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": -21,
+        "y": 703,
+        "w": 1421,
+        "h": 419,
+        "fill": "#473325"
+      },
+      {
+        "t": "rect",
+        "x": 984,
+        "y": 1146,
+        "w": 280,
+        "h": 110,
+        "fill": "#F22229"
+      },
+      {
+        "t": "rect",
+        "x": 529,
+        "y": 92,
+        "w": 141,
+        "h": 162,
+        "fill": "#473325"
+      },
+      {
+        "t": "text",
+        "x": 529,
+        "y": 92,
+        "w": 140,
+        "font": "numeral",
+        "color": "#FAF9F5",
+        "align": "center",
+        "text": "B"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 540,
+        "y": 733,
+        "w": 700,
+        "font": "title",
+        "color": "#FAF9F5",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 540,
+        "y": 803,
+        "w": 700,
+        "font": "caption",
+        "color": "#FAF9F5",
+        "align": "left",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 15,
+        "y": 277,
+        "w": 700,
+        "rot": 270,
+        "font": "caption",
+        "color": "#151515",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 66,
+        "y": 263,
+        "w": 700,
+        "rot": 270,
+        "font": "title",
+        "color": "#151515",
+        "align": "left",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "rect",
+        "x": -67,
+        "y": 174,
+        "w": 280,
+        "h": 110,
+        "rot": 90,
+        "fill": "#f12229"
+      }
+    ]
+  }
+}

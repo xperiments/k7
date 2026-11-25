@@ -128,8 +128,8 @@ The App's device protocol gains four methods - `art.status`, `art.upload`, `art.
   a full erase restores the factory.
 - **Two sheets, one pool.** The app opens the embedded factory sheet and, when the partition's
   header and CRC and the sheet's own checks pass, the user sheet. The pool is the factory sheet
-  first, then the user sheet, each in id order: five factory designs and five user designs are
-  ten. The picker is `ink_seed % (factory_count + user_count)`; an index before
+  first, then the user sheet, each in id order; the factory's designs and the user pack's are
+  one pool. The picker is `ink_seed % (factory_count + user_count)`; an index before
   `factory_count` selects the factory sheet and its template, the rest the user sheet and
   `index - factory_count`. `label_pick` still picks within a sheet; the mapping is the app's
   label code.

@@ -1,0 +1,367 @@
+{
+  "format": "k7art",
+  "v": 2,
+  "id": "k7.fe-90-index",
+  "name": "FE90 Index",
+  "label": {
+    "space": {
+      "w": 748,
+      "h": 359
+    },
+    "mask": {
+      "color": "#f5dfb2",
+      "r": 10
+    },
+    "aperture": {
+      "x": 95,
+      "y": 101,
+      "w": 556,
+      "h": 166,
+      "r": 83
+    },
+    "canvas": {
+      "backgrounds": [
+        "#758b63",
+        "#175b61"
+      ],
+      "active": 1
+    },
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "px": 32
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "px": 78
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "px": 18
+      }
+    },
+    "slots": {
+      "genre": {
+        "max": 96
+      },
+      "bpm": {
+        "max": 96
+      },
+      "song_title": {
+        "max": 96
+      },
+      "song_artist": {
+        "max": 96
+      },
+      "song_album": {
+        "max": 96
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 120,
+        "w": 748,
+        "h": 44,
+        "fill": "#ba3f54",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 164,
+        "w": 748,
+        "h": 44,
+        "fill": "#90d558",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 208,
+        "w": 748,
+        "h": 44,
+        "fill": "#16C2E8",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 54,
+        "w": 700,
+        "h": 2,
+        "fill": "#A8A298",
+        "still": true
+      },
+      {
+        "t": "rect",
+        "x": 24,
+        "y": 344,
+        "w": 700,
+        "h": 2,
+        "fill": "#A8A298",
+        "still": true
+      },
+      {
+        "t": "text",
+        "x": 24,
+        "y": 24,
+        "w": 66,
+        "font": "caption",
+        "color": "#3D2E22",
+        "align": "left",
+        "text": "INDEX:"
+      },
+      {
+        "t": "text",
+        "slot": "genre",
+        "x": 569,
+        "y": 24,
+        "w": 153,
+        "font": "caption",
+        "color": "#3D2E22",
+        "align": "right",
+        "preview": "Synthwave"
+      },
+      {
+        "t": "text",
+        "slot": "bpm",
+        "x": 19,
+        "y": 260,
+        "w": 142,
+        "font": "numeral",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "124"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 170,
+        "y": 278,
+        "w": 558,
+        "font": "title",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 170,
+        "y": 315,
+        "w": 558,
+        "font": "caption",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "Night Drive"
+      },
+      {
+        "t": "text",
+        "slot": "song_title",
+        "x": 94,
+        "y": 12,
+        "w": 473,
+        "font": "title",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "Neon Skyline"
+      }
+    ]
+  },
+  "jcard": {
+    "space": {
+      "w": 1300,
+      "h": 1280,
+      "unit": 320
+    },
+    "parts": {
+      "flap": {
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 1280
+      },
+      "spine": {
+        "x": 320,
+        "y": 0,
+        "w": 160,
+        "h": 1280
+      },
+      "cover": {
+        "x": 480,
+        "y": 0,
+        "w": 820,
+        "h": 1280
+      }
+    },
+    "background": "#F6F5F0",
+    "fonts": {
+      "title": {
+        "ff": "Archivo Narrow 600",
+        "size": 56
+      },
+      "numeral": {
+        "ff": "Barlow Condensed 700",
+        "size": 136
+      },
+      "caption": {
+        "ff": "IBM Plex Mono 500",
+        "size": 31
+      }
+    },
+    "prims": [
+      {
+        "t": "rect",
+        "x": 1,
+        "y": 0,
+        "w": 1300,
+        "h": 1280,
+        "fill": "#f5dfb2"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 303,
+        "w": 700,
+        "h": 4,
+        "fill": "#A8A298"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 350,
+        "w": 820,
+        "h": 72,
+        "fill": "#ba3f54"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 422,
+        "w": 820,
+        "h": 72,
+        "fill": "#90d558"
+      },
+      {
+        "t": "rect",
+        "x": 0,
+        "y": 494,
+        "w": 820,
+        "h": 72,
+        "fill": "#45a2b7"
+      },
+      {
+        "t": "rect",
+        "x": 615,
+        "y": 310,
+        "w": 295,
+        "h": 295,
+        "r": 147,
+        "fill": "#f5dfb3"
+      },
+      {
+        "t": "rect",
+        "x": 643,
+        "y": 338,
+        "w": 238,
+        "h": 238,
+        "r": 119,
+        "fill": "#3D2E22"
+      },
+      {
+        "t": "rect",
+        "x": 700,
+        "y": 395,
+        "w": 125,
+        "h": 125,
+        "r": 62,
+        "fill": "#f5dfb3"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 600,
+        "w": 700,
+        "h": 3,
+        "fill": "#A8A298"
+      },
+      {
+        "t": "rect",
+        "x": 540,
+        "y": 635,
+        "w": 700,
+        "h": 3,
+        "fill": "#A8A298"
+      },
+      {
+        "t": "text",
+        "x": 540,
+        "y": 263,
+        "w": 700,
+        "font": "caption",
+        "color": "#3D2E22",
+        "align": "left",
+        "text": "INDEX:"
+      },
+      {
+        "t": "text",
+        "slot": "title",
+        "x": 538,
+        "y": 922,
+        "w": 700,
+        "font": "numeral",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "FE90"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 538,
+        "y": 657,
+        "w": 700,
+        "font": "title",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "meta",
+        "x": 542,
+        "y": 878,
+        "w": 700,
+        "font": "caption",
+        "color": "#3D2E22",
+        "align": "left",
+        "preview": "Side A · Side B"
+      },
+      {
+        "t": "text",
+        "slot": "song_artist",
+        "x": 22,
+        "y": 858,
+        "w": 700,
+        "rot": 270,
+        "font": "caption",
+        "color": "#151515",
+        "align": "left",
+        "preview": "The Analog Sons"
+      },
+      {
+        "t": "text",
+        "slot": "song_album",
+        "x": 73,
+        "y": 844,
+        "w": 700,
+        "rot": 270,
+        "font": "title",
+        "color": "#151515",
+        "align": "left",
+        "preview": "Night Drive"
+      }
+    ]
+  }
+}
