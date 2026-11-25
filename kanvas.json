@@ -4288,6 +4288,15 @@
       "at": "2026-11-25T21:55:13Z",
       "by": "dsh",
       "desc": "Publishing a K7Art whose J-card text names a label Slot - the artist, the album, a genre - was refused with 'song_artist is not a J-card field (title, artist, meta)': 22 errors over six designs, although the spec and the editor's own field list allow the label's eleven Slots. The browser packer and the build's Python packer were the only places still holding the old three-field rule. Both now use the vocabulary's Slots plus title, artist and meta, and the spec's refusal table, the glossary, label-templates and the editor's guide say the same.\n\nCheck: import one of the designs that was refused and press Publish - it downloads the pack; bind a J-card text to 'year' and Publish still refuses it by name.\n\nVerified: the Python packer packs k7.neon with song_artist and song_album on its J-card; the browser-packer test does the same and refuses 'year'; Publish downloaded neon.k7artpack from the imported design; 106 unit tests, 24 Playwright tests, the Python selftest and make -C host check (184 checks)."
+    },
+    {
+      "id": "K7-20",
+      "title": "A J-card's spine on the shelf takes the same dark read as a picture's",
+      "state": "proposed",
+      "group": "K7",
+      "at": "2026-11-25T23:06:48Z",
+      "by": "dsh",
+      "desc": "On Albums, a case with no cover picture shows its K7Art's spine on its left face at full brightness, while every case with a picture sits under a 65% overlay - so one white or bright spine stood out in a row of dark ones. The J-card spine now takes the same absolute inset-0 overlay, in the App's shelf and in the editor's J-card Preview (which is the App's shelf, k7art.md 6). The byline a pool with no design falls back to is left undimmed, because it is the App's own text and must stay legible.\n\nCheck: on Albums, the spine of a coverless case now reads as dark as its neighbours; a case with a picture is unchanged; the editor's J-card Preview matches.\n\nVerified: the app's 985 tests, typecheck and build; the editor's 106 tests, build and 24 Playwright tests; make -C host check (216 label checks); the shelf checked with seeded albums."
     }
   ]
 }
