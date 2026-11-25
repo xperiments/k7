@@ -669,6 +669,13 @@ result, the disconnect reason and the number of tries. The **Setup page** report
 a browser dropped mid-flow still learns why a join failed.
 _Avoid_: connection, connect result, retry
 
+**Deck name**:
+The word a person gives one deck — `kitchen`, `studio` — or nothing, which is `k7`. The address is
+derived from it, never stored: `k7-<word>.local` when there is one, `k7.local` when there is not,
+and `k7.local` keeps answering as an alias while there is (ADR 0118). It is what tells two decks
+on one LAN apart.
+_Avoid_: hostname (that is the derived label), SSID (that is the Setup network), friendly name
+
 **Share window**:
 The sixty seconds during which the K7 will hand its network to a [**K7Player**](../../player/CONTEXT.md), opened by a person
 from the Menu and reported by the row's countdown. It raises no access point, it answers one
@@ -677,7 +684,7 @@ _Avoid_: pairing mode, provisioning mode, hotspot
 
 **Network record**:
 What a **Share window** hands over: the **Home network** and its **Network password** when there
-is one, `K7.local` and the **Setup password** always, and the K7's hostname and address. It is
+is one, `K7.local` and the **Setup password** always, and the K7's **Deck name** and address. It is
 composed by the K7, encrypted in flight, stored by the player, and never returned by a route or
 drawn on the panel.
 _Avoid_: credentials blob, Wi-Fi config, provisioning file
@@ -714,7 +721,8 @@ _Avoid_: unauthenticated, public, insecure
 ### The front door
 
 **Front door**:
-The device's listener at `http://k7.local`, its only address and port, and the API it carries:
+The device's listener at `http://k7.local` (or `http://k7-<name>.local` once the deck is named,
+with `k7.local` still answering), its only address and port, and the API it carries:
 `/api/*`, `/mcp`, `/library` and `/stream`. It serves **no product page** (ADR 0067): `/`,
 `/index.html`, `/bridge` and `/app` answer 302 to the App, and every unknown path is a 404. The
 one page it does serve is the **Setup page**, which exists precisely because the App cannot be

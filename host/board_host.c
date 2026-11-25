@@ -8,6 +8,7 @@
  * the board is the only thing that differs.
  */
 #include "app_board.h"
+#include "device_name.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -206,13 +207,72 @@ app_board_card_t app_board_card_mount(const char *expected_music_dir)
 
 const char *app_board_name(void) { return "host"; }
 
+/* The deck's name: beside the record when the test names a file, in this process
+ * otherwise - the two shapes the record and the setup password already have. */
+static char s_deck_name[DEVICE_NAME_MAX + 1];
+
+static bool host_name_path(char *out, size_t cap)
+{
+    const char *path = host_record_path();
+    if (!path) return false;
+    snprintf(out, cap, "%s.name", path);
+    return true;
+}
+
+bool app_board_name_load(char *out, size_t cap)
+{
+    if (!out || cap == 0) return false;
+    out[0] = '\0';
+    char path[512];
+    if (host_name_path(path, sizeof path)) {
+        FILE *f = fopen(path, "rb");
+        if (f) {
+            char buf[DEVICE_NAME_MAX + 8] = {0};
+            size_t got = fread(buf, 1, sizeof buf - 1, f);
+            fclose(f);
+            buf[got] = '\0';
+            while (got && (buf[got - 1] == '\n' || buf[got - 1] == '\r')) buf[--got] = '\0';
+            if (!device_name_word_ok(buf)) return false;
+            snprintf(out, cap, "%s", buf);
+            return true;
+        }
+    }
+    if (!s_deck_name[0]) return false;
+    snprintf(out, cap, "%s", s_deck_name);
+    return true;
+}
+
+esp_err_t app_board_name_save(const char *word)
+{
+    if (!word || !device_name_word_ok(word)) return ESP_ERR_INVALID_ARG;
+    snprintf(s_deck_name, sizeof s_deck_name, "%s", word);
+    char path[512];
+    if (!host_name_path(path, sizeof path)) return ESP_OK;
+    if (!*word) {
+        remove(path);
+        return ESP_OK;
+    }
+    FILE *f = fopen(path, "wb");
+    if (!f) return ESP_FAIL;
+    size_t wrote = fwrite(word, 1, strlen(word), f);
+    fclose(f);
+    return wrote == strlen(word) ? ESP_OK : ESP_FAIL;
+}
+
 /* The one value, movable here so the host tier reads what every consumer says about a
- * name it did not write. `K7_HOSTNAME` is a test seam, not a setting: the board reads its
- * own name, and a person's word reaches it another way (HA-04). */
+ * name it did not write. `K7_HOSTNAME` is a test seam (the full label, for a test that
+ * wants to move the name without the word's rules); otherwise the stored word derives it,
+ * exactly as the board's does. */
 const char *app_board_hostname(void)
 {
-    const char *name = getenv("K7_HOSTNAME");
-    return name && name[0] ? name : APP_BOARD_HOSTNAME;
+    const char *full = getenv("K7_HOSTNAME");
+    if (full && full[0]) return full;
+    static char label[DEVICE_NAME_ADDRESS_MAX];
+    char word[DEVICE_NAME_MAX + 1] = {0};
+    app_board_name_load(word, sizeof word);
+    if (!device_name_label(word, label, sizeof label))
+        snprintf(label, sizeof label, "%s", DEVICE_NAME_PRODUCT);
+    return label;
 }
 
 /* No radio, so no MAC: a host is not a deck, and the status document says so rather than

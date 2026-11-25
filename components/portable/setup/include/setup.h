@@ -26,6 +26,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "device_name.h"
 #include "wifi_record.h"
 
 #ifdef __cplusplus
@@ -74,6 +75,7 @@ typedef struct {
     bool ap_failed;    /* it could not be raised; the retry is due */
     char network[WIFI_RECORD_SSID_MAX + 1];
     char password[WIFI_RECORD_PASS_MAX + 1]; /* the setup password in force */
+    char name[DEVICE_NAME_MAX + 1];          /* the person's word for the deck, "" unnamed */
     uint32_t grace_left_ms;                  /* 0 when no grace window is running */
     bool has_attempt;
     bool attempt_ok;
@@ -111,6 +113,13 @@ bool setup_forget_network(uint32_t now_ms);
 
 /* Change the setup network's password. Validated; applied at the next session (P5). */
 bool setup_set_password(const char *password, uint32_t now_ms);
+
+/* Name the deck. The word is validated by device_name.h and stored in the device's own
+ * namespace; the address derives from it, so "kitchen" is `k7-kitchen.local` and "" is
+ * `k7.local` again. False when the word is not a legal label, and the stored name is then
+ * untouched. The address applies when the name is next read - mDNS advertises once at boot
+ * (P13), so a running deck answers the new name after its next start. */
+bool setup_set_name(const char *word);
 
 /* The record changed under us (the panel forgot the network, a password was restored):
  * re-read it and recompute what the device is. */

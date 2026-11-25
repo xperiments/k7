@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include "app_board.h"
+#include "device_name.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "http_server.h"
@@ -981,12 +982,15 @@ static bool origin_ok(const http_request_t *req)
     char local[32] = {0};
     if (L_local_ip) L_local_ip(local, sizeof local);
 
-    /* The deck's own name, from the one value, beside the two fixed names that are not
-     * it: the product's old spelling and a native client's localhost. */
+    /* The deck's own name, from the one value, and the product's bare name as the alias a
+     * client that has not learned the new one still asks for (HA-04). Beside them, the two
+     * fixed names that are not the deck: the product's old spelling and localhost. */
     char deck[64] = {0};
     if (!app_board_local_name(deck, sizeof deck)) deck[0] = '\0';
-    const char *const names[4] = {"xtape.local", deck, "localhost", local};
-    for (int i = 0; i < 4; i++) {
+    char alias[64];
+    snprintf(alias, sizeof alias, "%s.local", DEVICE_NAME_PRODUCT);
+    const char *const names[5] = {"xtape.local", deck, alias, "localhost", local};
+    for (int i = 0; i < 5; i++) {
         const char *name = names[i];
         if (!name[0]) continue;
         if (strcasecmp(auth, name) == 0) return true;

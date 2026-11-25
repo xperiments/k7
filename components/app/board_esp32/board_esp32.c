@@ -45,6 +45,7 @@
 #include "snapshot.h"
 
 #include "app_board.h"
+#include "device_name.h"
 #include "label_pack.h"
 #include "label_store.h"
 
@@ -196,11 +197,27 @@ const char *app_board_name(void)
     return "8048S050C";
 }
 
-/* The one value a rename changes; HA-04 reads the person's word into this and everything
- * else - mDNS, the guard, the share record - follows. */
+/* The deck's label: the person's word, derived once and kept. Every consumer asks for the
+ * label, and a status poll must not read flash to answer (P2 of wifi-provisioning.md). */
+static char s_deck_label[DEVICE_NAME_ADDRESS_MAX];
+static bool s_deck_label_loaded;
+
+static void deck_label_load(void)
+{
+    if (s_deck_label_loaded) return;
+    s_deck_label_loaded = true;
+    char word[DEVICE_NAME_MAX + 1] = {0};
+    if (app_board_name_load(word, sizeof word) &&
+        device_name_label(word, s_deck_label, sizeof s_deck_label))
+        return;
+    snprintf(s_deck_label, sizeof s_deck_label, "%s", DEVICE_NAME_PRODUCT);
+}
+
+/* The one value: the person's word plus the product's, or the product's alone. */
 const char *app_board_hostname(void)
 {
-    return APP_BOARD_HOSTNAME;
+    deck_label_load();
+    return s_deck_label;
 }
 
 /* The station MAC, read from the efuse the radio already holds. Not from NVS: an
@@ -285,6 +302,7 @@ esp_err_t app_board_wifi_record_save(const wifi_record_t *rec)
 
 /* The setup network's password: a string key beside the network's record (P25). */
 #define SETUP_PASSWORD_KEY "ap"
+#define DECK_NAME_KEY      "name"
 
 bool app_board_setup_password_load(char *out, size_t cap)
 {
@@ -300,6 +318,52 @@ bool app_board_setup_password_load(char *out, size_t cap)
         return false;
     }
     return true;
+}
+
+/* The deck's name, in the same namespace as the network and the setup password: it is one
+ * of the device's own settings, and a wiped flash takes it with the rest (HA-04). */
+bool app_board_name_load(char *out, size_t cap)
+{
+    if (!out || cap == 0) return false;
+    out[0] = '\0';
+    nvs_handle_t h;
+    if (nvs_open(WIFI_RECORD_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return false;
+    size_t len = cap;
+    esp_err_t e = nvs_get_str(h, DECK_NAME_KEY, out, &len);
+    nvs_close(h);
+    if (e != ESP_OK || !device_name_word_ok(out)) {
+        out[0] = '\0';
+        return false;
+    }
+    return true;
+}
+
+esp_err_t app_board_name_save(const char *word)
+{
+    if (!word || !device_name_word_ok(word)) return ESP_ERR_INVALID_ARG;
+
+    nvs_handle_t h;
+    esp_err_t e = nvs_open(WIFI_RECORD_NAMESPACE, NVS_READWRITE, &h);
+    if (e != ESP_OK) return e;
+    if (*word) {
+        e = nvs_set_str(h, DECK_NAME_KEY, word);
+    } else {
+        e = nvs_erase_key(h, DECK_NAME_KEY);
+        if (e == ESP_ERR_NVS_NOT_FOUND) e = ESP_OK;
+    }
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    if (e != ESP_OK) return e;
+
+    /* The label the readers ask for follows the word now, without a flash read later: a
+     * rename lands on the next boot for mDNS (it is advertised once, P13) and at once for
+     * the guard. */
+    char label[DEVICE_NAME_ADDRESS_MAX];
+    if (device_name_label(word, label, sizeof label))
+        snprintf(s_deck_label, sizeof s_deck_label, "%s", label);
+    s_deck_label_loaded = true;
+    flash_settled();
+    return ESP_OK;
 }
 
 esp_err_t app_board_setup_password_save(const char *password)
@@ -538,6 +602,34 @@ esp_err_t app_board_mdns_start(const char *hostname, uint16_t port, const char *
                  hostname, (unsigned)port, endpoint);
     } else {
         ESP_LOGE(TAG, "mdns_service_add: %s", esp_err_to_name(e));
+    }
+
+    /* A named deck keeps the product's bare name answering, with the same addresses: the
+     * alias is the compatibility promise, so a client, a player or a bookmark that has not
+     * learned the new name is not orphaned by the rename (HA-04). */
+    if (strcmp(hostname, DEVICE_NAME_PRODUCT) != 0) {
+        mdns_ip_addr_t nodes[2];
+        memset(nodes, 0, sizeof nodes);
+        int have = 0;
+        const char *const keys[2] = {"WIFI_STA_DEF", "WIFI_AP_DEF"};
+        for (int i = 0; i < 2; i++) {
+            esp_netif_t *netif = esp_netif_get_handle_from_ifkey(keys[i]);
+            esp_netif_ip_info_t ip;
+            if (!netif || esp_netif_get_ip_info(netif, &ip) != ESP_OK || ip.ip.addr == 0)
+                continue;
+            nodes[have].addr.type = ESP_IPADDR_TYPE_V4;
+            nodes[have].addr.u_addr.ip4.addr = ip.ip.addr;
+            if (have) nodes[have - 1].next = &nodes[have];
+            have++;
+        }
+        if (have) {
+            esp_err_t a = mdns_delegate_hostname_add(DEVICE_NAME_PRODUCT, &nodes[0]);
+            if (a == ESP_OK)
+                ESP_LOGI(TAG, "mDNS: %s.local also answers, as the alias", DEVICE_NAME_PRODUCT);
+            else
+                ESP_LOGW(TAG, "mDNS: the alias %s.local did not register: %s",
+                         DEVICE_NAME_PRODUCT, esp_err_to_name(a));
+        }
     }
     return e;
 }

@@ -107,6 +107,14 @@ esp_err_t app_board_setup_password_save(const char *password);
  * `K7_HOSTNAME` so the host tier can move the one value and read what each consumer says. */
 const char *app_board_hostname(void);
 
+/* The person's word for this deck, or "" when it has none. False when it cannot be read;
+ * the empty string is the normal answer for an unnamed deck, not an error. */
+bool app_board_name_load(char *out, size_t out_size);
+
+/* Store it, or clear it with "". A word the address rules refuse is ESP_ERR_INVALID_ARG
+ * and the stored one is untouched (device_name.h is the rule). */
+esp_err_t app_board_name_save(const char *word);
+
 /* `<hostname>.local`: the name a browser or a player resolves. False when `out` cannot
  * hold it. */
 static inline bool app_board_local_name(char *out, size_t out_size)

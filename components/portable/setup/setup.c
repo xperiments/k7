@@ -7,6 +7,8 @@
  */
 #include "setup.h"
 
+#include "device_name.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -36,6 +38,9 @@ typedef struct {
     uint32_t grace_deadline_ms;
     /* The record, cached: an HTTP worker must not read NVS (ADR 0054). */
     wifi_record_t rec;
+    /* The person's word for the deck, cached for the same reason: the page's status is
+     * read by HTTP workers and by the panel. */
+    char name[DEVICE_NAME_MAX + 1];
     bool has_attempt;
     bool attempt_ok;
     char attempt_ssid[WIFI_RECORD_SSID_MAX + 1];
@@ -88,6 +93,11 @@ static bool save_record_job(void *ctx)
 static bool save_password_job(void *ctx)
 {
     return app_board_setup_password_save((const char *)ctx) == ESP_OK;
+}
+
+static bool save_name_job(void *ctx)
+{
+    return app_board_name_save((const char *)ctx) == ESP_OK;
 }
 
 /* --------------------------------------------------------------- the access point */
@@ -148,6 +158,9 @@ void setup_init(void)
     M.provisioned = app_board_wifi_record_load(&M.rec) && wifi_record_provisioned(&M.rec);
     if (!app_board_setup_password_load(M.rec.setup_pass, sizeof M.rec.setup_pass))
         M.rec.setup_pass[0] = '\0';
+    /* The name is read here too: setup_status() runs on the panel's task and on HTTP
+     * workers, and neither may touch flash to answer. */
+    if (!app_board_name_load(M.name, sizeof M.name)) M.name[0] = '\0';
     M.boot_deadline_ms = now_ms() + SETUP_BOOT_WINDOW_MS;
     bool wants = !M.provisioned;
     unlock();
@@ -349,6 +362,20 @@ bool setup_set_password(const char *password, uint32_t now)
     return true;
 }
 
+bool setup_set_name(const char *word)
+{
+    if (!word || !device_name_word_ok(word)) return false;
+
+    /* Stored on the flash writer's internal stack (ADR 0054), like the record and the
+     * password: the caller is an HTTP worker whose stack is in PSRAM. */
+    if (!flash_job_run(save_name_job, (void *)word)) return false;
+
+    lock();
+    snprintf(M.name, sizeof M.name, "%s", word);
+    unlock();
+    return true;
+}
+
 void setup_record_changed(uint32_t now)
 {
     wifi_record_t rec;
@@ -381,6 +408,7 @@ void setup_status(setup_status_t *out)
     out->ap_failed = M.ap_failed;
     snprintf(out->network, sizeof out->network, "%s", M.rec.ssid);
     snprintf(out->password, sizeof out->password, "%s", wifi_record_setup_password(&M.rec));
+    snprintf(out->name, sizeof out->name, "%s", M.name);
     uint32_t n = now_ms();
     if (M.session && M.grace_deadline_ms != 0 && (int32_t)(M.grace_deadline_ms - n) > 0)
         out->grace_left_ms = M.grace_deadline_ms - n;

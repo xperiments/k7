@@ -63,6 +63,7 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/app_services/include \
        -I$(ROOT)/components/portable/label/include \
        -I$(ROOT)/components/portable/app_board/include \
+       -I$(ROOT)/components/portable/device_name/include \
        -I$(ROOT)/components/portable/wifi_record/include \
        -I$(ROOT)/components/portable/handover/include \
        -I$(ROOT)/components/portable/espnow_stream/include \
@@ -134,6 +135,7 @@ PROD_SRC := \
   $(ROOT)/components/portable/label/label_pool.c \
   $(ROOT)/components/portable/label/label_values.c \
   $(ROOT)/components/portable/wifi_record/wifi_record.c \
+  $(ROOT)/components/portable/device_name/device_name.c \
   $(ROOT)/components/portable/handover/handover_frame.c \
   $(ROOT)/components/portable/handover/handover_key.c \
   $(ROOT)/components/portable/share/share.c \
@@ -176,6 +178,7 @@ vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/playlist_select \
           $(ROOT)/components/portable/card_select \
           $(ROOT)/components/portable/wifi_record \
+          $(ROOT)/components/portable/device_name \
           $(ROOT)/components/portable/handover \
           $(ROOT)/components/portable/share \
           $(ROOT)/components/portable/setup \
@@ -191,7 +194,7 @@ BURST_OBJ := $(OBJ)/mi_burst.o $(OBJ)/mi_icy.o
 CASSETTE_OBJ := $(OBJ)/cassette.o $(OBJ)/cassette_layout.o $(OBJ)/timeline.o
 ARTWORK_OBJ := $(OBJ)/artwork.o $(OBJ)/id3.o $(OBJ)/flac.o $(OBJ)/tags.o
 MENU_OBJ := $(OBJ)/menu.o
-SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o
+SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o $(OBJ)/device_name.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
 SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o $(OBJ)/art_store_host.o
@@ -215,7 +218,7 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
          $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
          $(BIN)/t43_espnow_stream $(BIN)/t44_espnow_emitter \
-         $(BIN)/t45_station_restart $(BIN)/t46_art_pack $(BIN)/t49_name
+         $(BIN)/t45_station_restart $(BIN)/t46_art_pack $(BIN)/t49_name $(BIN)/t50_device_name
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -391,7 +394,7 @@ $(BIN)/t41_handover: $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/t41_ha
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t42_share: $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/wifi_record.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t42_share.o
+$(BIN)/t42_share: $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/wifi_record.o $(OBJ)/device_name.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t42_share.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
@@ -413,7 +416,11 @@ $(BIN)/t46_art_pack: $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OB
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t49_name: $(OBJ)/board_host.o $(OBJ)/wifi_record.o $(OBJ)/shim.o $(OBJ)/t49_name.o
+$(BIN)/t49_name: $(OBJ)/board_host.o $(OBJ)/wifi_record.o $(OBJ)/device_name.o $(OBJ)/shim.o $(OBJ)/t49_name.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t50_device_name: $(OBJ)/device_name.o $(OBJ)/t50_device_name.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
@@ -421,7 +428,7 @@ $(BIN)/t36_wifi_record: $(OBJ)/wifi_record.o $(OBJ)/t36_wifi_record.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
-$(BIN)/t38_setup: $(OBJ)/setup.o $(OBJ)/wifi_record.o $(OBJ)/flash_job.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t38_setup.o
+$(BIN)/t38_setup: $(OBJ)/setup.o $(OBJ)/device_name.o $(OBJ)/wifi_record.o $(OBJ)/flash_job.o $(OBJ)/board_host.o $(OBJ)/shim.o $(OBJ)/t38_setup.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

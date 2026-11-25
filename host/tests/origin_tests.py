@@ -209,7 +209,10 @@ def named():
         check("named: MCP accepts the moved name's origin", status, 200)
         status, _, _ = request(port, "POST", "/mcp", {"Origin": "http://k7.local"}, MCP_BODY,
                                host="k7.local")
-        check("named: and refuses the name it no longer answers", status, 403)
+        check("named: the bare product name still answers, as the alias", status, 200)
+        status, _, _ = request(port, "POST", "/mcp", {"Origin": "http://studio.local"},
+                               MCP_BODY, host="studio.local")
+        check("named: and a name that is not this deck's is refused", status, 403)
     finally:
         stop(proc)
 

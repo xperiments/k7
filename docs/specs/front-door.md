@@ -177,7 +177,9 @@ one.
 
 **S2.** Every reply carries the device's address on the network as
 `X-K7-Net: 192.168.1.42:80`, when it has one, and the CORS reply exposes it so a page can read
-it. `k7.local` is a name the browser resolves over mDNS, and the App asks the status on a timer:
+it. `k7.local` is a name the browser resolves over mDNS — or `k7-<name>.local` when a person has
+named the deck, in which case `k7.local` keeps answering as an alias (ADR 0118) — and the App asks
+the status on a timer:
 resolving it every five seconds is a heartbeat that spends its time resolving. The header rides
 on a reply the App was already receiving - the page load included - so the App learns the
 address without asking for it and sends the rest of its requests, the stream included, there.

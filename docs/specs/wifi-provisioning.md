@@ -54,9 +54,10 @@ to a K7Player — is a separate feature with no access point, specified in
 
 **P8.** The setup network is a WPA2 access point whose SSID is the literal string **`K7.local`**
 (capital K, one dot, ≤32 bytes), serving the ordinary listener at **`192.168.4.1`** on port 80.
-The device's mDNS hostname stays **`k7`**, so `http://k7.local/setup` resolves to the same page on
-any client whose mDNS works; `192.168.4.1` is the path that works everywhere, and the panel names
-both.
+The device's mDNS hostname is its **deck name** (`k7` until a person names it, `k7-<word>`
+after, ADR 0118), so `http://k7.local/setup` resolves to the same page on any client whose mDNS
+works — and `k7.local` keeps answering as an alias when a name is set. `192.168.4.1` is the path
+that works everywhere, and the panel names both.
 
 **P9. It has exactly three triggers, and no others:**
 
@@ -90,7 +91,7 @@ failing — the person is still there.
 
 **P12. It is not filtered — except for the setup surface, which exists only while it does.**
 `/stream`, `/api/*`, `/mcp`, `/library` and `GET /` answer on the setup network exactly as on the LAN.
-The **setup page and all seven `/api/setup*` routes** answer only while a session is up; with no
+The **setup page and all eight `/api/setup*` routes** answer only while a session is up; with no
 session they are `404` on every interface ([ADR 0077](../adr/0077-the-setup-surface-exists-only-while-its-hotspot-does.md)),
 so a device that is working has no page anywhere that can rewrite its network. The setup password is a
 curtain, not a boundary (§8).
@@ -110,7 +111,7 @@ That is why P30 records the attempt rather than trusting the page's connection.
 ## 3. The setup page
 
 **P15.** `GET /setup` answers `text/html; charset=utf-8` with one hand-written page, held in
-portable rodata, **no external asset, no webfont, no framework, no build step** — **7,688 bytes** measured (the page string; 7,520 before the K7 palette)
+portable rodata, **no external asset, no webfont, no framework, no build step** — **8,471 bytes** measured (the page string; 7,688 before the deck name row, 7,520 before the K7 palette)
 of HTML with an inline style block and the script that drives the route table below. It is served
 **only while the setup network is up** (P12), on whichever interface asks. The page wears the K7
 look ([`k7-look.md`](./k7-look.md)): the same accent, neutral ink and line, written into its
@@ -127,9 +128,13 @@ inline stylesheet.
 3. The **password** field, with a show/hide toggle, always empty. An open network hides it and says
    "open — no password".
 4. **Other network** — a name field and a password field, for a hidden SSID or one the scan missed.
-5. **Setup password** — a new-password field and a `Set` button, with the sentence "takes effect
+5. **Deck name** — a text field holding the word in force (it is not a secret, so it is shown)
+   and a `Name this deck` button, with the sentence that the deck answers at `k7-<name>.local`,
+   that `k7.local` keeps working, and that the name applies when the deck next starts. Empty
+   goes back to `k7`.
+6. **Setup password** — a new-password field and a `Set` button, with the sentence "takes effect
    the next time the setup network starts". Empty means keep.
-6. The footnote: *"The radio only sees 2.4 GHz networks. A 5 GHz-only network will not appear here
+7. The footnote: *"The radio only sees 2.4 GHz networks. A 5 GHz-only network will not appear here
    and cannot be joined."*
 
 **P17. It never pre-fills a password and no route ever returns one** — not the network's, not the
@@ -154,9 +159,9 @@ device does not refuse a network its owner asked for.
 
 ## 4. The routes
 
-**Seven** registrations on the existing listener. The route table's ceiling (`HTTP_MAX_ROUTES`, 20)
-grows to **28**; nineteen were registered before this change and twenty-six are after it, and the
-comment above that constant records the build that failed because a registration did not fit.
+**Eight** registrations on the existing listener: the page and seven `/api/setup*` routes, the
+name's among them. The route table's ceiling is **36** (`HTTP_MAX_ROUTES`), and the comment above
+that constant records the build that failed because a registration did not fit.
 
 | Route | Method | Body | Answer |
 |---|---|---|---|
@@ -165,6 +170,7 @@ comment above that constant records the build that failed because a registration
 | `/api/setup/scan` | GET | — | the picker's list |
 | `/api/setup/join` | POST | `{"ssid","password"}` | the outcome, or a refusal (blocks ≤25 s) |
 | `/api/setup/ap` | POST | `{"on":true\|false}` | `204` |
+| `/api/setup/name` | POST | `{"name"}` | `204`; the word is stored and the address derived, applied at the next start |
 | `/api/setup/ap-password` | POST | `{"password"}` | `204`, applied at the next start |
 | `/api/setup/forget` | POST | `{}` | `204`: the network is erased, the setup password is not |
 
@@ -172,6 +178,7 @@ comment above that constant records the build that failed because a registration
 
 ```json
 {"state":"joined","network":"xperiments-2.4G","address":"192.168.0.44",
+ "deck":{"name":"kitchen","address":"k7-kitchen.local"},
  "hotspot":{"ssid":"K7.local","address":"192.168.4.1","up":false,"failed":false},
  "closes_in_ms":0,"last_attempt":null}
 ```
@@ -188,6 +195,7 @@ field, and neither is any password.
 | Condition | Answer |
 |---|---|
 | A 7- or 64-character password, or a 0- or 33-byte SSID | `400` naming the rule |
+| A name that is not a lowercase label — uppercase, over 24 characters, a leading or trailing hyphen, a double hyphen, or another character | `400` naming the rule; the stored name is untouched |
 | A join submitted with no setup session | `404`: the whole surface is gone (P12, ADR 0077). The `409` the caller returns for this case is unreachable through HTTP and stays as a race guard |
 | A scan already running | `429`, "a scan is already running" |
 | A body that is not `application/json` | `415`, by the existing body rule |
@@ -221,10 +229,10 @@ password is its own key (P25) and survives — a device can forget a network and
 password, which is the reason the two are not one blob. Without this, a failed attempt (whose choice
 is stored first, above) leaves a device chasing a network nobody wants at every boot.
 
-**P25. Two keys in that namespace, not one blob.** `rec` holds the home network — magic `K7WF`,
+**P25. Three keys in that namespace, not one blob.** `rec` holds the home network — magic `K7WF`,
 format version, the SSID (≤32 bytes), its password (≤63) and the lengths. `ap` holds the setup
-password as an ordinary string. They are separate because a device can have a setup password
-before it has a network at all — the page's password field is reachable on a device that has never
+password as an ordinary string, and `name` the deck's word (absent means no name, which is `k7`).
+They are separate because a device can have a setup password before it has a network at all — the page's password field is reachable on a device that has never
 joined anything — and because "unprovisioned" must keep meaning exactly one thing. Absent,
 wrong-magic or wrong-version `rec` reads as **unprovisioned**; an absent `ap` means `12345678`.
 
@@ -386,7 +394,7 @@ or B8 — a cable and eyes are the only instruments those have.
 
 | # | Test | Tier |
 |---|---|---|
-| H1 | `GET /setup` answers 200 `text/html` and the body contains the picker, the password field, the "Other network" row and the 2.4 GHz line | host |
+| H1 | `GET /setup` answers 200 `text/html` and the body contains the picker, the password field, the "Other network" row, the deck-name row and the 2.4 GHz line | host |
 | H2 | `GET /api/setup` with no record says `unprovisioned`, and with a record names the SSID | host |
 | H3 | The scan list collapses two BSSIDs of one SSID to the stronger, sorts by signal, flags open networks, and never carries a password | host |
 | H4 | A join with a 7-character password is a 400 naming the rule; a 33-byte SSID likewise | host |
@@ -398,6 +406,7 @@ or B8 — a cable and eyes are the only instruments those have.
 | H10 | Five failed attempts stop the retries and the state says so | host |
 | H11 | The record's codec round-trips, and wrong magic/version/short blobs read as no record | host |
 | H12 | The reason mapping names 2, 4, 15, 201, 205 and the fallback | host |
+| H13 | A lowercase label is stored and the state answers `k7-<word>.local`; an empty name answers `k7.local`; an uppercase, over-long, hyphen-split or dotted name is refused with the rule and changes nothing | host |
 | H13 | Two scans at once: one answers, the other is a 429 | host |
 | H14 | Raising the hotspot from a client that is not on it is a 404 — the panel is the only way in on a healthy device | host |
 | B1 | Unprovisioned boot: the setup network appears, `192.168.4.1/setup` and `k7.local/setup` both answer, the panel shows the password | **board only** |

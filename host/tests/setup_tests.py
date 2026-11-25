@@ -115,7 +115,7 @@ def main():
         check("/setup is a 200", status, 200)
         check("/setup is HTML", headers.get("content-type"), "text/html; charset=utf-8")
         for needle in ("Networks", "Another network", "2.4 GHz", "id='join'",
-                       "The hotspot"):
+                       "The hotspot", "This deck's name", "id='setname'"):
             check(f"the page carries {needle!r}", needle in body, True)
 
         # The page's script is 6 KB of JavaScript living inside a C string, which no compiler
@@ -195,6 +195,31 @@ def main():
             check("and stored", f.read(), "newpass99")
         status, _, body = get(port, "/api/setup")
         check("but never returned", "newpass99" in body, False)
+
+        # --- the deck's name: the person's word, and the address it makes
+        status, _, body = request(port, "POST", "/api/setup/name", {"name": "Kitchen"})
+        check("an uppercase name is refused", status, 400)
+        check("with the rule that refused it", "lowercase" in body, True)
+        status, _, _ = request(port, "POST", "/api/setup/name", {"name": "-kitchen"})
+        check("a leading hyphen is refused", status, 400)
+        status, _, _ = request(port, "POST", "/api/setup/name", {"name": "kitchen--two"})
+        check("a double hyphen is refused", status, 400)
+        status, _, _ = request(port, "POST", "/api/setup/name", {"name": "k" * 25})
+        check("a 25-character name is refused", status, 400)
+        status, _, body = get(port, "/api/setup")
+        check("and a refused name changed nothing", json.loads(body)["deck"]["name"], "")
+        status, _, _ = request(port, "POST", "/api/setup/name", {"name": "kitchen"})
+        check("a name is accepted", status, 204)
+        status, _, body = get(port, "/api/setup")
+        st = json.loads(body)
+        check("the page reads the name back", st["deck"]["name"], "kitchen")
+        check("and the address it makes", st["deck"]["address"], "k7-kitchen.local")
+        with open(record + ".name") as f:
+            check("the word is stored, the address is not", f.read(), "kitchen")
+        status, _, _ = request(port, "POST", "/api/setup/name", {"name": ""})
+        check("an empty name goes back to the product's", status, 204)
+        status, _, body = get(port, "/api/setup")
+        check("which is k7.local", json.loads(body)["deck"]["address"], "k7.local")
 
         # --- the hotspot's own switch
         status, _, _ = request(port, "POST", "/api/setup/ap", {"on": "yes"})

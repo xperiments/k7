@@ -241,7 +241,9 @@ address (P8), so the player needs no field to find it. The record's IPv4 is the 
 address and is used for that network only.
 
 **H36. The hostname is resolved with mDNS before the IPv4 is trusted.** A K7 whose DHCP lease
-moves is found by `k7.local`; the address is the fallback for a network whose mDNS does not
+moves is found by its name — `k7-<word>.local` once a person has named the deck, `k7.local`
+otherwise, which keeps answering as an alias (ADR 0118); the address is the fallback for a network
+whose mDNS does not
 answer. A player that has neither sweeps (H21).
 
 **H37. The record is stored only after it validates**: version 1, the flags consistent with the

@@ -9,6 +9,8 @@
  */
 #include "setup_http.h"
 
+#include "device_name.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,6 +91,12 @@ static const char PAGE[] =
     "<label for='otherpass'>Password</label>\n"
     "<input id='otherpass' type='password' autocomplete='off'>\n"
     "<button class='alt' id='joinother'>Join this one</button>\n"
+    "<h2>This deck's name</h2>\n"
+    "<label for='deck'>Name</label>\n"
+    "<input id='deck' autocomplete='off' spellcheck='false' maxlength='24'>\n"
+    "<button class='alt' id='setname'>Name this deck</button>\n"
+    "<small>It answers at k7-&lt;name&gt;.local, and k7.local keeps working. Applied when the"
+    " deck next starts. Leave it empty to go back to k7.</small>\n"
     "<h2>The hotspot</h2>\n"
     "<label for='apass'>New password (at least 8 characters)</label>\n"
     "<input id='apass' type='password' autocomplete='off'>\n"
@@ -104,7 +112,7 @@ static const char PAGE[] =
     "var ticker = null;\n"
     "function say(text, bad) { var s = $('state'); s.textContent = text;"
     " s.className = 'state' + (bad ? ' bad' : ''); }\n"
-    "function busy(on) { ['join','joinother','refresh','setap','stop'].forEach(function (id)"
+    "function busy(on) { ['join','joinother','refresh','setap','setname','stop'].forEach(function (id)"
     " { $(id).disabled = on; }); }\n"
     "function post(path, body) { return fetch(path, {method: 'POST',"
     " headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}); }\n"
@@ -125,6 +133,7 @@ static const char PAGE[] =
     "  try {\n"
     "    var r = await fetch('/api/setup'); var st = await r.json();\n"
     "    var d = describe(st); say(d[0], d[1]);\n"
+    "    if (st.deck) $('deck').value = st.deck.name || '';\n"
     /* One countdown at a time: load() runs again after every join and every visit, and a
      * left-over interval would fight the new one over the status line and never stop. */
     "    if (ticker) { clearInterval(ticker); ticker = null; }\n"
@@ -197,6 +206,15 @@ static const char PAGE[] =
     "  else say('The stored network was not forgotten.', true);\n"
     "  busy(false); load();\n"
     "};\n"
+    "$('setname').onclick = async function () {\n"
+    "  busy(true);\n"
+    "  var r = await post('/api/setup/name', {name: $('deck').value.trim()});\n"
+    "  if (r.status === 204) say('The deck is named. It answers at its new address when it"
+    " next starts.', false);\n"
+    "  else { var j = await r.json().catch(function () { return {}; });"
+    " say(j.why || 'That name was not accepted.', true); }\n"
+    "  busy(false); load();\n"
+    "};\n"
     "$('stop').onclick = async function () {\n"
     "  busy(true); say('Closing the hotspot...', false);\n"
     "  await post('/api/setup/ap', {on: false});\n"
@@ -260,7 +278,7 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     setup_status_t st;
     setup_status(&st);
 
-    char body[640];
+    char body[768];
     json_writer_t w = json_writer_make(body, sizeof body);
     json_puts(&w, "{\"state\":\"");
     json_puts(&w, setup_state_name(st.state));
@@ -281,7 +299,15 @@ static http_result_t status_route(int fd, const http_request_t *req, void *ctx)
     } else {
         json_puts(&w, "null");
     }
-    json_puts(&w, ",\"hotspot\":{\"ssid\":\"" SETUP_NETWORK_SSID "\",\"address\":\""
+    /* The deck's own name, beside the network's: the page shows it, and the address is
+     * derived rather than stored so the page cannot show one the device does not answer. */
+    json_puts(&w, ",\"deck\":{\"name\":\"");
+    json_escaped(&w, st.name);
+    json_puts(&w, "\",\"address\":\"");
+    char deck_address[DEVICE_NAME_ADDRESS_MAX];
+    if (device_name_address(st.name, deck_address, sizeof deck_address))
+        json_escaped(&w, deck_address);
+    json_puts(&w, "\"},\"hotspot\":{\"ssid\":\"" SETUP_NETWORK_SSID "\",\"address\":\""
                   SETUP_NETWORK_IP "\",\"up\":");
     json_puts(&w, st.session ? "true" : "false");
     json_puts(&w, ",\"failed\":");
@@ -483,6 +509,34 @@ static http_result_t ap_password_route(int fd, const http_request_t *req, void *
     return HTTP_HANDLED;
 }
 
+static http_result_t name_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    if (!surface_open()) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    if (strcmp(req->path, "/api/setup/name") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+
+    char word[DEVICE_NAME_MAX + 1];
+    if (!field(req, "name", word, sizeof word)) {
+        http_json_send(fd, 400, "{\"why\":\"the body needs a name\"}", NULL);
+        return HTTP_HANDLED;
+    }
+    if (!setup_set_name(word)) {
+        http_json_send(fd, 400,
+                       "{\"why\":\"a name is up to 24 lowercase letters, digits and single "
+                       "hyphens, and does not start or end with one\"}",
+                       NULL);
+        return HTTP_HANDLED;
+    }
+    http_send_headers(fd, 204, NULL, 0, NULL);
+    return HTTP_HANDLED;
+}
+
 static http_result_t forget_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -515,6 +569,8 @@ esp_err_t setup_http_start(void)
     e = http_server_register_route_method("/api/setup/ap", "POST", ap_route, NULL);
     if (e != ESP_OK) return e;
     e = http_server_register_route_method("/api/setup/forget", "POST", forget_route, NULL);
+    if (e != ESP_OK) return e;
+    e = http_server_register_route_method("/api/setup/name", "POST", name_route, NULL);
     if (e != ESP_OK) return e;
     e = http_server_register_route_method("/api/setup/ap-password", "POST", ap_password_route, NULL);
     if (e == ESP_OK) ESP_LOGI(TAG, "the setup page is at /setup");
