@@ -443,6 +443,8 @@ against the code**; two were new, introduced by R7, and are withdrawn with it.
 | `GET /api/library` | `application/json` | Prebuilt tree, generation, state, truncation |
 | `GET /api/library.bin` | `application/octet-stream` | Versioned arena, CRC and generation |
 | `POST /api/play` | `application/json` | `{"path":"..."}`; next-chunk switch |
+| `POST /api/next` | — | `204`; the broadcast steps one Track forward |
+| `POST /api/prev` | — | `204`; the broadcast steps back to the Track it came from |
 | `POST /api/rescan` | `application/json` | `{}`; `202` started, `409` already scanning |
 | `POST /mcp` | `application/json` | MCP 2025-11-25; read-only by default |
 
@@ -516,6 +518,33 @@ that does not resolve is a 404 and does not interrupt the current Track. `Accept
 **Requirement P2.** The HTTP layer reads a declared `Content-Length` into a heap buffer capped
 at 8192 bytes. Missing length is 411, oversized is 413, and a non-JSON type is 415; bytes that
 arrived with the header block are preserved.
+
+### 6.4a `POST /api/next` and `POST /api/prev` — a step
+
+**Requirement N1.** Each route sets the broadcast's own step: `/api/next` the skip and `/api/prev`
+the previous, the primitives the deck's transport and the MCP control tools already call
+(`mini_icecast_skip`/`mini_icecast_prev`). The change lands at the next chunk boundary, like
+`/api/play`. Neither route invents an order: next walks the order in force (the Library, the
+selected Playlist, or the shuffle permutation) and previous returns to the Track the broadcast
+came from.
+
+**Requirement N2.** Both answer `204 No Content` with no body and **no `Content-Length`**
+(RFC 7230 §3.3.2), and carry the device's usual headers. There is no second reply shape: a caller
+learns what is playing from `GET /api/status`, whose `playing` block moves with the broadcast.
+
+**Requirement N3.** Both take the device's one POST shape (P2): `Content-Type: application/json`
+and a declared length, which may be zero. A missing length is 411 and a non-JSON type is 415, as
+everywhere else on this device; the body itself is ignored.
+
+**Requirement N4.** A step while the station is restarting is `503` with the station's sentence,
+like `/api/play`. A deck with no card has nothing to step to: the step is accepted, the broadcast
+keeps the idle bed, and `/api/status` says `library: "no_card"`, so a caller is not misled about
+what happened.
+
+**Requirement N5.** The route table matches on a prefix, so both handlers compare their path: a
+near-miss (`/api/nextXYZ`) is `404`. An unmatched GET is the front door's `404` too — the index
+catch-all answers it before the method check can report `405` — so a wrong method on a step reads
+as "no such path" and is refused either way.
 
 ### 6.5 `POST /api/rescan` — generations
 
@@ -645,6 +674,7 @@ host result transfers.
 | T17 | Rescan generations | A slow `/api/library` reader, a rescan with one added Track, a second simultaneous rescan and a card-less rescan | **host** | Old JSON completes; generation advances; broadcast sees the new count; one 202 and one 409; `no_card` stays diagnosable |
 | T18 | Board Library tree and soak | A real card (64 tracks), a temporary three-level fixture, mDNS/MCP through `xtape.local`, and a 10-minute stream + rescan soak | **board** | Boot logs scan/arena/JSON/PSRAM/truncated; nested JSON/blob/play agree; `dns-sd` sees `_mcp._tcp`; 0 rebases/faults over 10 min; synchronous scan stays |
 | T19 | Tone ownership | A new K7 and a new player on ESP-NOW: turn GAIN; then listen to `GET /stream` from a browser; repeat with an old player | **board only** | The player's level changes at once and the browser's stream is untinted; with an old player (no flag) the S3 tone and the late knob return |
+| T20 | Step routes | Raw `POST /api/next` and `/api/prev` with a 30-second fixture, a near-miss path, a GET on each, and a card-less deck | **host** (board run owed: one `curl -X POST /api/next`) | Both answer 204 with no `Content-Length` and no body; the status names another Track and `prev` returns to the one next left; a near-miss is 404; the stream still answers |
 
 ---
 

@@ -55,8 +55,13 @@ extern "C" {
  * setup page and its six routes make twenty-six, and the art pack's four make thirty. A
  * screen-HTTP build is thirty-two. The table had 18 once, so a screen-HTTP build failed the
  * last registration with ESP_ERR_NO_MEM and never started its listener - the capture build
- * could not serve at all. Headroom is cheap; a dead listener is not. */
-#define HTTP_MAX_ROUTES 36
+ * could not serve at all. Headroom is cheap; a dead listener is not.
+ *
+ * Since then the playlist, cover and snapshot routes landed, and the broadcast's two steps
+ * (next, previous) went in beside /api/play. The ceiling is raised by four rather than kept
+ * exact for the same reason as the paragraph above: a full table is a station that does not
+ * start, and that failure is silent until someone looks for the listener. */
+#define HTTP_MAX_ROUTES 40
 #define HTTP_LISTEN_BACKLOG 16
 #define HTTP_MAX_CONNS 6
 

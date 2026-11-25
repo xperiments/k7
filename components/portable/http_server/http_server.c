@@ -44,6 +44,7 @@ const char *http_reason_phrase(int status)
     switch (status) {
     case 200: return "OK";
     case 202: return "Accepted";
+    case 204: return "No Content";
     case 301: return "Moved Permanently";
     case 400: return "Bad Request";
     case 403: return "Forbidden";

@@ -2,7 +2,7 @@
 
 # This suite judges the device's HTTP surface with no page: `/` is a 404 and `/library`
 # is the index.
-# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15, T16 and T17,
+# Host acceptance tests for the HTTP surface: T3, T4, T5, T6, T7, T8, T9, T12, T14, T15, T16, T17 and T20,
 # run against the real server on this machine with no board attached.
 #
 #   HOST_BIN=host/build/bin/icecast_host HOST_DIR=host sh host/tests/http_tests.sh
@@ -511,5 +511,112 @@ if [ -n "$BOARD_URL" ]; then
 else
     printf 'tier: host build (macOS)\n'
 fi
+group "T20  POST /api/next and /api/prev step the broadcast"
+if [ -z "$BOARD_URL" ]; then
+    mkdir -p "$TMP/steps"
+    # Thirty-second Tracks: the broadcast must not advance on its own inside this group, or
+    # a step would be credited to the clock.
+    $PY - "$TMP/steps" <<'PYX'
+import os, sys, wave
+root = sys.argv[1]
+for rel in ("one.wav", "two.wav", "three.wav"):
+    with wave.open(os.path.join(root, rel), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(b"\0\0" * (44100 * 30))
+PYX
+    if start_server "$TMP/steps" 18111 "$TMP/steps.log"; then
+        # The status document is the oracle: a step changes what it says is playing, and the
+        # step itself answers with no body at all.
+        step_path() {
+            curl -s --max-time 3 "http://127.0.0.1:18111/api/status" 2>/dev/null |
+                $PY -c 'import json,sys; print(json.load(sys.stdin)["playing"]["path"])' 2>/dev/null
+        }
+        # Wait for the broadcast to name a Track before stepping away from it.
+        BEFORE=""
+        n=0
+        while [ "$n" -lt 40 ] && [ -z "$BEFORE" ]; do
+            BEFORE=$(step_path)
+            n=$((n + 1))
+            sleep 0.1
+        done
+        check_match "the broadcast begins on a named Track" "$BEFORE" '\.wav$'
+
+        # Every POST on this device declares its type (P2), and a step carries no body: a
+        # declared zero length is enough.
+        step() { # path -> status
+            curl -s -o /dev/null -w '%{http_code}' -X POST \
+                -H 'Content-Type: application/json' -H 'Content-Length: 0' "http://127.0.0.1:18111$1"
+        }
+        STEP_HDR=$(curl -s -D "$TMP/step.hdr" -o "$TMP/step.body" -X POST \
+            -H 'Content-Type: application/json' -H 'Content-Length: 0' \
+            "http://127.0.0.1:18111/api/next" && tr -d '\r' <"$TMP/step.hdr")
+        check_eq "POST /api/next is a 204" \
+            "$(printf '%s' "$STEP_HDR" | head -1 | awk '{print $2}')" "204"
+        check_match "and says No Content rather than Error" "$STEP_HDR" '^HTTP/1.0 204 No Content$'
+        check_no_match "and carries no Content-Length on it" "$STEP_HDR" '^Content-Length:'
+        check_eq "and no body" "$(wc -c <"$TMP/step.body" | tr -d ' ')" "0"
+
+        # The change lands at the next chunk boundary, so the status is polled rather than
+        # read once. The fixture has three Tracks, so a step cannot land on the same one.
+        AFTER=$(step_path)
+        n=0
+        while [ "$n" -lt 40 ] && [ "$AFTER" = "$BEFORE" ]; do
+            sleep 0.1
+            AFTER=$(step_path)
+            n=$((n + 1))
+        done
+        if [ -n "$AFTER" ] && [ "$AFTER" != "$BEFORE" ]; then
+            ok "next moved the broadcast off the Track it was on"
+        else
+            bad "next did not move the broadcast (still '$BEFORE')"
+        fi
+
+        check_eq "POST /api/prev is a 204" "$(step /api/prev)" "204"
+        NOW=$(step_path)
+        n=0
+        while [ "$n" -lt 40 ] && [ "$NOW" = "$AFTER" ]; do
+            sleep 0.1
+            NOW=$(step_path)
+            n=$((n + 1))
+        done
+        check_eq "prev returned the broadcast to the Track next left" "$NOW" "$BEFORE"
+
+        # The front door's "/" catch-all answers every unmatched GET, so a wrong method on a
+        # step reads as "no such path" (404) rather than 405 - it is refused either way, and
+        # the status document proves nothing moved.
+        check_eq "a GET on the next step is refused" \
+            "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18111/api/next")" "404"
+        check_eq "a GET on the previous step is refused" \
+            "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18111/api/prev")" "404"
+        # The table matches on a prefix, so a near-miss path reaches the handler; only the two
+        # exact paths are steps.
+        check_eq "a prefix of the next step is a 404" \
+            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+                -H 'Content-Length: 0' "http://127.0.0.1:18111/api/nextXYZ")" "404"
+        check_eq "the live stream still answers after a step" \
+            "$(curl -s -o /dev/null --max-time 3 -w '%{http_code}' "http://127.0.0.1:18111/stream")" "200"
+    else
+        bad "the step fixture server did not start"
+    fi
+
+    # A deck with no card has nothing to step to; the step is still accepted, and the status
+    # document keeps saying so rather than the route inventing a Track.
+    if start_no_card_server "$TMP/steps" 18112 "$TMP/steps-nocard.log"; then
+        check_eq "a step on a card-less deck is accepted" \
+            "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+                -H 'Content-Length: 0' "http://127.0.0.1:18112/api/next")" "204"
+        NOCARD=$(curl -s --max-time 3 "http://127.0.0.1:18112/api/status")
+        check_match "and its Library still says no card" "$NOCARD" '"library":"no_card"'
+        check_eq "and the status still answers" \
+            "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:18112/api/status")" "200"
+    else
+        bad "the card-less step server did not start"
+    fi
+else
+    printf '  skip  the step routes are host-only for now (the board run needs a card)\n'
+fi
+
 printf '%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ] || exit 1

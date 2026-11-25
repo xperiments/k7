@@ -383,6 +383,35 @@ static http_result_t play_route(int fd, const http_request_t *req, void *ctx)
     return HTTP_HANDLED;
 }
 
+/* POST /api/next and POST /api/prev: the two steps a remote control has, over the same
+ * primitives the deck's own transport calls (mini_icecast_skip/prev). No request body and
+ * no reply body - a step is a request to the broadcast, and what is playing is the status
+ * document's to report, so the caller reads it there rather than from a second reply shape. */
+static http_result_t step_route(int fd, const http_request_t *req, void *ctx)
+{
+    (void)ctx;
+    /* The route outlives the station (ADR 0106), so a step that arrives while it is
+     * stopped is refused here rather than queued for a station that may never come - the
+     * same rule /api/play follows. */
+    if (!S.running) {
+        send_json(fd, 503, "{\"ok\":false,\"error\":\"the station is restarting\"}");
+        return HTTP_HANDLED;
+    }
+    bool next = strcmp(req->path, "/api/next") == 0;
+    /* The table matches on a prefix, so /api/nextXYZ lands here too; only the two exact
+     * paths are steps (the same sharp edge /api/rescan closes by comparing its path). */
+    if (!next && strcmp(req->path, "/api/prev") != 0) {
+        http_send_error(fd, 404, "no such path");
+        return HTTP_HANDLED;
+    }
+    if (next) mini_icecast_skip();
+    else mini_icecast_prev();
+    /* 204, and no Content-Length on it (RFC 7230 §3.3.2): (size_t)-1 is the writer's
+     * "omit the length" and there is no body to count. */
+    http_send_headers(fd, 204, NULL, (size_t)-1, NULL);
+    return HTTP_HANDLED;
+}
+
 static http_result_t stream_route(int fd, const http_request_t *req, void *ctx)
 {
     (void)ctx;
@@ -1563,15 +1592,20 @@ esp_err_t mini_icecast_start(const mini_icecast_cfg_t *cfg)
 
     /* /stream is the one route on the plain listener: port 80, no TLS, ever
      * (front door R2 - hardware players and car head units cannot trust a private
-     * CA). /api/play is the app's, so it stays on the TLS listener. The routes are
-     * registered once for the process: a stop keeps them, and they answer 503 while the
-     * station is down (both routes read S.running), because a restart must not take the
-     * device's listening surface with it - and registering again would fill the table. */
+     * CA). /api/play and its two steps are the app's, so they stay on the TLS listener.
+     * The routes are registered once for the process: a stop keeps them, and the stream,
+     * play and step routes answer 503 while the station is down (they read S.running),
+     * because a restart must not take the device's listening surface with it - and
+     * registering again would fill the table. */
     if (!S.routes_registered) {
         esp_err_t err2 = http_server_register_route_on(HTTP_LISTENER_PLAIN, "/stream", stream_route,
                                                       NULL);
         if (err2 == ESP_OK)
             err2 = http_server_register_route_method("/api/play", "POST", play_route, NULL);
+        if (err2 == ESP_OK)
+            err2 = http_server_register_route_method("/api/next", "POST", step_route, NULL);
+        if (err2 == ESP_OK)
+            err2 = http_server_register_route_method("/api/prev", "POST", step_route, NULL);
         if (err2 != ESP_OK) {
             ESP_LOGE(TAG, "cannot register the broadcast routes: %s", esp_err_to_name(err2));
             mini_icecast_stop();
