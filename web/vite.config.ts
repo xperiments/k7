@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { patchTaglibGlue } from './src/audio/taglib-glue.ts';
+import { k7artAnswer } from './src/site/k7art-dev.ts';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 
@@ -99,6 +100,40 @@ function appPath(): Plugin {
     name: 'k7-app-path',
     configureServer(server) { server.middlewares.use(rewrite); },
     configurePreviewServer(server) { server.middlewares.use(rewrite); },
+  };
+}
+
+/**
+ * The Site's third document in development (S1 of `docs/specs/k7-site.md`).
+ *
+ * The editor is a second Vite project (ADR 0112): its build carries `base: "/k7art/"`, and
+ * its own development server runs at `:5178` with `base: "/"`, where the editor is edited.
+ * The Site's server knew neither, so `/k7art` fell through to the Site's document — the
+ * editor's address answered with the wrong page. This answers it from the editor's build
+ * instead, at the base it ships under, and says the build is missing rather than serving
+ * the Site. `npm run build:editor` at the repository root refreshes it.
+ */
+function k7artInDevelopment(): Plugin {
+  const dist = resolve(root, '../tools/LabelEditor/dist');
+  return {
+    name: 'k7-art-in-development',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use((req: { url?: string }, res: {
+        statusCode: number;
+        setHeader: (name: string, value: string) => void;
+        end: (body: Buffer | string) => void;
+      }, next: () => void) => {
+        const answer = k7artAnswer(dist, req.url ?? '');
+        if (!answer) { next(); return; }
+        res.statusCode = answer.status;
+        res.setHeader('content-type', answer.type);
+        /* The build is a local artifact that `npm run build:editor` replaces, so a reload
+         * must ask again rather than trust the browser's copy. */
+        res.setHeader('cache-control', 'no-cache');
+        res.end(answer.body);
+      });
+    },
   };
 }
 
@@ -248,6 +283,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       noWorkerInDevelopment(),
       appPath(),
+      k7artInDevelopment(),
       taglibWithoutDynamicCode(),
       shellOutputs(cdnWeights),
     ],
