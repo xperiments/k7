@@ -30,7 +30,7 @@
     "monitor": "./tools/build.sh sunton monitor",
     "player:monitor": "./player/build.sh monitor",
     "player:flash": "./player/build.sh build flash monitor",
-    "release": "./tools/build.sh sunton release && ./player/build.sh release",
+    "release": "./player/build.sh release && ./tools/build.sh sunton release",
     "assets": "python3 tools/convert_cassette_assets.py",
     "screens": "python3 tools/capture_screens.py",
     "reconfigure": "./tools/build.sh default reconfigure",

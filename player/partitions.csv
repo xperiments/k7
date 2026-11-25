@@ -1,0 +1,15 @@
+# The K7Player has 4 MB and two OTA slots, because its firmware arrives over the air
+# (ADR 0117, player-update.md U24). nvs keeps the offset the single-app table gave it, so the
+# USB flash that moves a provisioned player onto this table keeps the network record it was
+# handed; no share window is needed after it.
+#
+# The slots are 1.75 MB: the 0.6.2 image is 891,712 B and the speaker build is 1,550,272 B, so
+# both fit with room for the next release. A table with 1.25 MB slots (IDF's default two-OTA
+# layout) would put the speaker build out of reach of the air for good.
+# Name,   Type, SubType, Offset,   Size, Flags
+nvs,      data, nvs,     0x9000,   0x6000,
+phy_init, data, phy,     0xf000,   0x1000,
+ota_0,    app,  ota_0,   0x10000,  0x1C0000,
+ota_1,    app,  ota_1,   0x1D0000, 0x1C0000,
+# After the slots, so moving to this table never touches nvs.
+otadata,  data, ota,     0x390000, 0x2000,

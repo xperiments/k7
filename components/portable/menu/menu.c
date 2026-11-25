@@ -40,6 +40,7 @@ typedef enum {
     LIST_BROWSE,
     LIST_ABOUT,
     LIST_WIFI,
+    LIST_PLAYER,
 } menu_list_t;
 
 typedef struct {
@@ -60,7 +61,14 @@ static const fixed_row_t k_settings_rows[] = {
     {"Rescan", MENU_ICON_RESCAN, MENU_ROW_ACTION},
     {"Wi-Fi", MENU_ICON_WIFI, MENU_ROW_SUBMENU},
     {"About", MENU_ICON_ABOUT, MENU_ROW_SUBMENU},
-    {"Player", MENU_ICON_STATION, MENU_ROW_ACTION},
+    {"Player", MENU_ICON_STATION, MENU_ROW_SUBMENU},
+};
+
+/* The player's list: how its audio is sent, and the image the K7 hands it (ADR 0104,
+ * ADR 0117). The Update row's value is its state (player-update.md U26). */
+static const fixed_row_t k_player_rows[] = {
+    {"Transport", MENU_ICON_STATION, MENU_ROW_ACTION},
+    {"Update", MENU_ICON_FIRMWARE, MENU_ROW_ACTION},
 };
 
 /* The setup network's list: what it is, its password, and the two acts (ADR 0076,
@@ -95,6 +103,9 @@ struct menu {
     menu_facts_t facts; /* version/board/partition point into the buffers below */
     char         version_buf[MENU_FACTS_MAX];
     char         board_buf[MENU_FACTS_MAX];
+    char         update_image_buf[18];
+    char         update_from_buf[18];
+    char         update_outcome_buf[64];
     char         partition_buf[MENU_FACTS_MAX];
     char         network_buf[MENU_FACTS_MAX];
     char         setup_pass_buf[MENU_FACTS_MAX];
@@ -167,6 +178,22 @@ static void facts_copy(menu_t *m, const menu_facts_t *facts)
     copy_opt(m->version_buf, sizeof m->version_buf, facts->version, &m->facts.version);
     copy_opt(m->board_buf, sizeof m->board_buf, facts->board, &m->facts.board);
     copy_opt(m->partition_buf, sizeof m->partition_buf, facts->partition, &m->facts.partition);
+    m->facts.update_loaded = facts->update_loaded;
+    m->facts.update_state = facts->update_state;
+    m->facts.update_found = facts->update_found;
+    m->facts.update_stale = facts->update_stale;
+    m->facts.update_serving = facts->update_serving;
+    m->facts.update_serving_total = facts->update_serving_total;
+    m->facts.update_percent = facts->update_percent;
+    m->facts.update_direction = facts->update_direction;
+    m->facts.update_served = facts->update_served;
+    m->facts.update_failed = facts->update_failed;
+    copy_opt(m->update_image_buf, sizeof m->update_image_buf, facts->update_image,
+             &m->facts.update_image);
+    copy_opt(m->update_from_buf, sizeof m->update_from_buf, facts->update_from,
+             &m->facts.update_from);
+    copy_opt(m->update_outcome_buf, sizeof m->update_outcome_buf, facts->update_outcome,
+             &m->facts.update_outcome);
     m->facts.playlists = facts->playlists;
     m->facts.playlist_count = facts->playlist_count;
     m->facts.playlist_selected = facts->playlist_selected;
@@ -322,6 +349,7 @@ static int list_count(const menu_t *m)
     case LIST_ROOT: return (int)(sizeof k_root_rows / sizeof k_root_rows[0]);
     case LIST_SETTINGS: return (int)(sizeof k_settings_rows / sizeof k_settings_rows[0]);
     case LIST_WIFI: return (int)(sizeof k_wifi_rows / sizeof k_wifi_rows[0]);
+    case LIST_PLAYER: return (int)(sizeof k_player_rows / sizeof k_player_rows[0]);
     case LIST_PLAYLISTS:
         if (!lib_ok(m)) return 1;                  /* No card */
         if (m->facts.playlist_count < 0) return 2; /* Library order + Too many lists */
@@ -368,6 +396,7 @@ static void build_title(menu_t *m)
     case LIST_SETTINGS: snprintf(m->title, sizeof m->title, "Settings"); return;
     case LIST_ABOUT: snprintf(m->title, sizeof m->title, "About"); return;
     case LIST_WIFI: snprintf(m->title, sizeof m->title, "Wi-Fi"); return;
+    case LIST_PLAYER: snprintf(m->title, sizeof m->title, "Player"); return;
     case LIST_BROWSE: break;
     }
 
@@ -464,9 +493,7 @@ static void build_settings_row(const menu_t *m, int index, menu_row_t *r)
     case 0: /* Backlight */
         snprintf(r->value, sizeof r->value, "%s", backlight_name(m->facts.backlight));
         break;
-    case 4: /* Player: how the audio reaches it (ADR 0104) */
-        snprintf(r->value, sizeof r->value, "%s", m->facts.player_espnow ? "ESP-NOW" : "HTTP");
-        break;
+    /* 4 is Player now: a list, so the row carries no value (menu.md). */
     case 1: /* Rescan */
         snprintf(r->label, sizeof r->label, "%s",
                  m->facts.rescanning ? "Rescanning..." : "Rescan");
@@ -474,6 +501,89 @@ static void build_settings_row(const menu_t *m, int index, menu_row_t *r)
         break;
     default: break;
     }
+}
+
+static void build_player_row(const menu_t *m, int index, menu_row_t *r)
+{
+    if (index < 0 || index >= (int)(sizeof k_player_rows / sizeof k_player_rows[0])) return;
+    build_fixed(&k_player_rows[index], r);
+
+    if (index == 0) { /* Transport: the same choice the Settings row used to carry */
+        snprintf(r->value, sizeof r->value, "%s", m->facts.player_espnow ? "ESP-NOW" : "HTTP");
+        return;
+    }
+
+    /* Update (U26). With HTTP there is nothing to hear, so the row says why; an image that
+     * is absent is the K7's business, not the player's; and the act's own states are inert. */
+    const menu_facts_t *f = &m->facts;
+    if (!f->player_espnow) {
+        snprintf(r->value, sizeof r->value, "Transport is HTTP");
+        r->enabled = false;
+        return;
+    }
+    if (!f->update_loaded) {
+        snprintf(r->value, sizeof r->value, "No image");
+        r->enabled = false;
+        return;
+    }
+    switch (f->update_state) {
+    case PUA_PROBING:
+        snprintf(r->value, sizeof r->value, "Searching...");
+        r->enabled = false;
+        return;
+    case PUA_OPENING:
+    case PUA_BLOCKS:
+    case PUA_VERIFYING:
+        if (f->update_serving_total > 1) {
+            snprintf(r->value, sizeof r->value, "Updating %d of %d", f->update_serving,
+                     f->update_serving_total);
+        } else {
+            snprintf(r->value, sizeof r->value, "Updating %d%%", f->update_percent);
+        }
+        r->enabled = false;
+        return;
+    default:
+        break;
+    }
+    /* The act finished: the row names the firmware it ended with, not just a count, until the
+     * list is reopened and its probe speaks for the player again (U26). The lines are assembled
+     * in a wider buffer and cut to fit: the value is 32 bytes and the compiler cannot see that
+     * the numbers are small. */
+    const char *image = f->update_image ? f->update_image : "?";
+    char text[64];
+    if (f->update_served > 0) {
+        if (f->update_failed > 0) {
+            snprintf(text, sizeof text, "%d updated to\n%s, %d failed", f->update_served, image,
+                     f->update_failed);
+        } else if (f->update_served == 1) {
+            snprintf(text, sizeof text, "Updated to\n%s", image);
+        } else {
+            snprintf(text, sizeof text, "%d updated to\n%s", f->update_served, image);
+        }
+        snprintf(r->value, sizeof r->value, "%.*s", (int)sizeof r->value - 1, text);
+        r->enabled = false;
+        return;
+    }
+    if (f->update_failed > 0) {
+        snprintf(text, sizeof text, "%s failed,\nstill %s", image,
+                 f->update_from ? f->update_from : "?");
+        snprintf(r->value, sizeof r->value, "%.*s", (int)sizeof r->value - 1, text);
+        r->enabled = false;
+        return;
+    }
+    if (f->update_found == 0) {
+        snprintf(r->value, sizeof r->value, "No player");
+        r->enabled = false;
+        return;
+    }
+    if (f->update_stale == 0) {
+        snprintf(r->value, sizeof r->value, "Up to date\n(%s)", image);
+        r->enabled = false;
+        return;
+    }
+    snprintf(r->value, sizeof r->value, "%s %s %s", f->update_from ? f->update_from : "?",
+             f->update_direction < 0 ? "->" : "<-", f->update_image ? f->update_image : "?");
+    r->enabled = true;
 }
 
 static void build_wifi_row(const menu_t *m, int index, menu_row_t *r)
@@ -663,6 +773,9 @@ static void build_row(const menu_t *m, int index, menu_row_t *r)
     case LIST_WIFI:
         build_wifi_row(m, index, r);
         break;
+    case LIST_PLAYER:
+        build_player_row(m, index, r);
+        break;
     case LIST_BROWSE:
         if (!lib_ok(m)) build_note(m, r);
         else build_browse_row(m, index, r);
@@ -825,7 +938,20 @@ static bool facts_same(const menu_t *m, const menu_facts_t *f)
            same_text(m->facts.hotspot_address, f->hotspot_address) &&
            m->facts.playlists == f->playlists &&
            m->facts.playlist_count == f->playlist_count &&
-           m->facts.playlist_selected == f->playlist_selected;
+           m->facts.playlist_selected == f->playlist_selected &&
+           m->facts.update_loaded == f->update_loaded &&
+           m->facts.update_state == f->update_state &&
+           m->facts.update_found == f->update_found &&
+           m->facts.update_stale == f->update_stale &&
+           m->facts.update_serving == f->update_serving &&
+           m->facts.update_serving_total == f->update_serving_total &&
+           m->facts.update_percent == f->update_percent &&
+           m->facts.update_direction == f->update_direction &&
+           m->facts.update_served == f->update_served &&
+           m->facts.update_failed == f->update_failed &&
+           same_text(m->facts.update_image, f->update_image) &&
+           same_text(m->facts.update_from, f->update_from) &&
+           same_text(m->facts.update_outcome, f->update_outcome);
 }
 
 void menu_update(menu_t *m, const library_t *lib, const menu_facts_t *facts,
@@ -1012,7 +1138,7 @@ menu_action_t menu_activate(menu_t *m)
             return MENU_ACTION_RESCAN;
         case 2: enter_list(m, LIST_WIFI); break;
         case 3: enter_list(m, LIST_ABOUT); break;
-        case 4: return MENU_ACTION_PLAYER;
+        case 4: enter_list(m, LIST_PLAYER); break;
         default: break;
         }
         break;
@@ -1025,6 +1151,10 @@ menu_action_t menu_activate(menu_t *m)
             m->action_playlist = m->facts.playlists[m->playlist_order[m->band - 1]].id;
             return MENU_ACTION_WALK;
         }
+        break;
+    case LIST_PLAYER:
+        if (m->band == 0) return MENU_ACTION_PLAYER;
+        if (m->band == 1) return MENU_ACTION_PLAYER_UPDATE;
         break;
     case LIST_WIFI:
         switch (m->band) {
@@ -1075,6 +1205,10 @@ bool menu_back(menu_t *m)
     case LIST_WIFI:
         m->list = LIST_SETTINGS;
         m->band = 2;
+        break;
+    case LIST_PLAYER:
+        m->list = LIST_SETTINGS;
+        m->band = 4;
         break;
     case LIST_BROWSE: {
         if (!m->browse_path[0]) {

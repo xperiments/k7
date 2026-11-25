@@ -22,6 +22,7 @@
 #include "dr_mp3.h"
 
 #include "player_output.h"
+#include "player_ota.h"
 #include "player_ring.h"
 #include "player_stream.h"
 #include "player_tone.h"
@@ -178,6 +179,9 @@ int player_playout_tick(void)
     M.refused += refused;
     M.frames += frames;
     M.audio_now = played > 0;
+    /* A new image proves itself by making sound (player-update.md U22): one call, only while an
+     * update is pending. */
+    if (played > 0) player_ota_streamed();
     if (played > 0) {
         M.playing = true;
         M.priming = false;

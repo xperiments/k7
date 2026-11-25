@@ -28,9 +28,15 @@ void player_status_set_fault(player_status_t *s, bool faulted)
     if (s) s->fault = faulted;
 }
 
+void player_status_set_updating(player_status_t *s, bool updating)
+{
+    if (s) s->updating = updating;
+}
+
 player_light_t player_status_light(const player_status_t *s)
 {
     if (!s) return PLAYER_LIGHT_SEARCHING;
+    if (s->updating) return PLAYER_LIGHT_UPDATING;
     if (s->fault) return PLAYER_LIGHT_FAULT;
     if (s->stream && s->audio) return PLAYER_LIGHT_PLAYING;
     if (s->network) return PLAYER_LIGHT_READY;
@@ -43,6 +49,7 @@ const char *player_light_name(player_light_t light)
     case PLAYER_LIGHT_READY: return "ready";
     case PLAYER_LIGHT_PLAYING: return "playing";
     case PLAYER_LIGHT_FAULT: return "fault";
+    case PLAYER_LIGHT_UPDATING: return "updating";
     case PLAYER_LIGHT_SEARCHING: break;
     }
     return "searching";

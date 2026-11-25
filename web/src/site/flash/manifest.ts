@@ -16,6 +16,12 @@ export interface FirmwarePart {
   sha256: string;
 }
 
+export interface FirmwareImage {
+  file: string;
+  size: number;
+  sha256: string;
+}
+
 export interface Firmware {
   version: string;
   commit: string;
@@ -24,6 +30,8 @@ export interface Firmware {
   flash: { mode: string; size: string; freq: string };
   built_at: string;
   parts: FirmwarePart[];
+  /** The signed image the K7 hands a player (ADR 0116). The player's manifest only. */
+  image?: FirmwareImage;
 }
 
 export type BoardId = 'k7' | 'player';

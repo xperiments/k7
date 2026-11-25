@@ -84,6 +84,7 @@ page exists to show in one place.
 | A share window | [`network-handover.md`](./specs/network-handover.md) §3, [`menu.md`](./specs/menu.md) | **measured** · board, 2026-11-18 (§7) |
 | The handover | [`network-handover.md`](./specs/network-handover.md) §5 | **measured** · board, 2026-11-18 (T11, T13, T15); the AP fallback (T14) is not |
 | The player plays | [`k7player.md`](./specs/k7player.md) §4–§5 | **measured** · board, 2026-11-18 (B1, B5) |
+| The player takes a new image | [`player-update.md`](./specs/player-update.md) U1–U29, [ADR 0116](./adr/0116-a-players-firmware-is-a-signed-image-the-k7-carries.md), [ADR 0117](./adr/0117-a-players-update-is-a-persons-act.md) | **planned** · not built: a press of Update on the K7, ten seconds of silence per player, and an image that proves itself |
 
 ---
 
@@ -172,11 +173,14 @@ stateDiagram-v2
   Playing --> Fault: two seconds of frames that never decode
   Fault --> Ready: the fault clears
   Ready --> Searching: the network it joined goes away
+  Playing --> Updating: a K7 hands it an image
+  Updating --> Ready: it reboots into it
 ```
 
-The light has four states and nothing between them (R31): **Searching** while it sweeps or retries
-a network, **Ready** when it is on a network with nothing to play, **Playing** while audio leaves an
-output, and **Fault** when the reason is not the network. The handover is not a pairing — the K7
+The light has five states and nothing between them (R31): **Searching** while it sweeps or retries a
+network, **Ready** when it is on a network with nothing to play, **Playing** while audio leaves an
+output, **Updating** while it writes the image a K7 handed it, and **Fault** when the reason is not
+the network. The handover is not a pairing — the K7
 answers one player inside a share window and remembers nothing afterwards (ADR 0098, ADR 0099).
 The player has no transport, no volume and no page ([`k7player.md`](./specs/k7player.md) R2, R5,
 R32), and whether the K7 emits over the radio at all is the **K7's** setting, so *Ready* can simply

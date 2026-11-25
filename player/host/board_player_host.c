@@ -9,6 +9,7 @@
  */
 #include "player_board.h"
 #include "player_output.h"
+#include "player_update.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -52,9 +53,11 @@ static int s_answers_n;
 static char s_asked[HOST_RESOLVE_MAX][64];
 static int s_asked_n;
 
+
 static player_board_frame_fn s_frame_cb;
 static player_board_packet_fn s_audio_cb;
 static player_board_packet_fn s_tone_cb;
+static player_board_update_fn s_update_cb;
 static int s_audio_sent;
 static void *s_frame_ctx;
 static bool s_now_on;
@@ -82,8 +85,11 @@ static uint8_t s_peer_lmk[HO_LMK_LEN];
 void host_player_stream_reset(void); /* defined with the stream section below */
 void host_player_output_reset(void); /* defined with the output section below */
 
+void host_player_ota_reset(void); /* defined with the update section below */
+
 void host_player_reset(void)
 {
+    host_player_ota_reset();
     host_player_stream_reset();
     host_player_output_reset();
     memset(s_wifi, 0, sizeof s_wifi);
@@ -307,6 +313,166 @@ void player_board_espnow_set_tone(player_board_packet_fn on_tone)
 {
     s_tone_cb = on_tone;
 }
+
+/* ------------------------------------------------------------ the update's script
+ *
+ * A spare slot of 64 KB, a marker string, and flags for what the board was asked to do. The
+ * curve is the board's, so the stand-in verify checks the digest and that a signature arrived:
+ * what that proves is the plumbing and the decisions, not ECDSA (player-update.md U18).
+ */
+
+#define HOST_SLOT_MAX (64 * 1024)
+#define HOST_TO_MAX 24
+
+typedef struct {
+    uint8_t dst[6];
+    uint8_t data[32];
+    size_t len;
+} host_to_t;
+
+static uint8_t s_ota_slot[HOST_SLOT_MAX];
+static uint32_t s_ota_len;
+static uint32_t s_ota_written;
+static bool s_ota_open;
+static int s_ota_begins;
+static bool s_ota_committed;
+static bool s_ota_rebooted;
+static bool s_ota_rolled_back;
+static bool s_ota_valid;
+static bool s_ota_verify_ok = true;
+static bool s_ota_pending;
+static char s_ota_marker[33];
+static char s_ota_committed_version[33];
+static host_to_t s_to[HOST_TO_MAX];
+static int s_to_n;
+
+void host_player_ota_reset(void)
+{
+    memset(s_ota_slot, 0, sizeof s_ota_slot);
+    s_ota_len = 0;
+    s_ota_written = 0;
+    s_ota_open = false;
+    s_ota_begins = 0;
+    s_ota_committed = false;
+    s_ota_rebooted = false;
+    s_ota_rolled_back = false;
+    s_ota_valid = false;
+    s_ota_verify_ok = true;
+    s_ota_pending = false;
+    memset(s_ota_marker, 0, sizeof s_ota_marker);
+    memset(s_ota_committed_version, 0, sizeof s_ota_committed_version);
+    s_to_n = 0;
+}
+
+void host_player_ota_record(bool present) { s_has_record = present; }
+void host_player_ota_marker(const char *version)
+{
+    s_ota_pending = true;
+    snprintf(s_ota_marker, sizeof s_ota_marker, "%s", version ? version : "");
+}
+void host_player_ota_fail_verify(bool fail) { s_ota_verify_ok = !fail; }
+const uint8_t *host_player_ota_slot(void) { return s_ota_slot; }
+uint32_t host_player_ota_written(void) { return s_ota_written; }
+int host_player_ota_begins(void) { return s_ota_begins; }
+bool host_player_ota_committed(void) { return s_ota_committed; }
+const char *host_player_ota_committed_version(void) { return s_ota_committed_version; }
+bool host_player_ota_rebooted(void) { return s_ota_rebooted; }
+bool host_player_ota_rolled_back(void) { return s_ota_rolled_back; }
+bool host_player_ota_valid(void) { return s_ota_valid; }
+int host_player_sent_to_count(void) { return s_to_n; }
+bool host_player_sent_to(int index, uint8_t out[6], uint8_t *data, size_t *len)
+{
+    if (index < 0 || index >= s_to_n) return false;
+    memcpy(out, s_to[index].dst, 6);
+    memcpy(data, s_to[index].data, s_to[index].len);
+    *len = s_to[index].len;
+    return true;
+}
+
+void player_board_espnow_set_update(player_board_update_fn on_update) { s_update_cb = on_update; }
+
+bool player_board_espnow_send_to(const uint8_t dst[6], const uint8_t *data, size_t len)
+{
+    if (!dst || !data || !len || len > sizeof s_to[0].data) return false;
+    if (s_to_n >= HOST_TO_MAX) return false;
+    memcpy(s_to[s_to_n].dst, dst, 6);
+    memcpy(s_to[s_to_n].data, data, len);
+    s_to[s_to_n].len = len;
+    s_to_n++;
+    return true;
+}
+
+const char *player_board_version(void) { return "0.6.2"; }
+
+bool player_board_ota_pending(char *version, size_t cap)
+{
+    if (!version || !cap) return false;
+    snprintf(version, cap, "%s", s_ota_marker);
+    return s_ota_pending;
+}
+
+uint32_t player_board_ota_slot_size(void) { return HOST_SLOT_MAX; }
+
+bool player_board_ota_begin(uint32_t image_len)
+{
+    player_board_ota_abort();
+    if (image_len == 0 || image_len > HOST_SLOT_MAX) return false;
+    s_ota_begins++;
+    s_ota_open = true;
+    s_ota_len = image_len;
+    s_ota_written = 0;
+    memset(s_ota_slot, 0, sizeof s_ota_slot);
+    return true;
+}
+
+bool player_board_ota_write(uint32_t offset, const uint8_t *data, size_t len)
+{
+    if (!s_ota_open || !data || len == 0) return false;
+    if (offset != s_ota_written || offset + len > s_ota_len) return false;
+    memcpy(s_ota_slot + offset, data, len);
+    s_ota_written += len;
+    return true;
+}
+
+void player_board_ota_abort(void)
+{
+    s_ota_open = false;
+    s_ota_len = 0;
+    s_ota_written = 0;
+}
+
+bool player_board_ota_verify(const char *version, const uint8_t sha256[32], const uint8_t *sig,
+                             size_t sig_len)
+{
+    if (!s_ota_len || !version || !sig || sig_len == 0) return false;
+    if (!s_ota_verify_ok) return false;
+    uint8_t digest[32];
+    ho_sha256(s_ota_slot, s_ota_len, digest);
+    if (memcmp(digest, sha256, 32) != 0) return false;
+    /* The curve is the board's: a signature arrived is all this stub can say. */
+    return sig[0] != 0;
+}
+
+bool player_board_ota_commit(const char *version)
+{
+    if (!s_ota_open || !version) return false;
+    s_ota_open = false;
+    s_ota_committed = true;
+    snprintf(s_ota_committed_version, sizeof s_ota_committed_version, "%s", version);
+    s_ota_pending = false;
+    snprintf(s_ota_marker, sizeof s_ota_marker, "%s", version);
+    return true;
+}
+
+void player_board_ota_mark_valid(void)
+{
+    s_ota_valid = true;
+    s_ota_pending = false;
+    s_ota_marker[0] = '\0';
+}
+
+void player_board_ota_rollback(void) { s_ota_rolled_back = true; }
+void player_board_ota_reboot(void) { s_ota_rebooted = true; }
 
 bool player_board_espnow_send(const uint8_t *data, size_t len)
 {

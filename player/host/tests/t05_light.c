@@ -17,14 +17,17 @@
 #include "player_light.h"
 #include "player_net.h"
 #include "espnow_stream.h"
+#include "player_ota.h"
 #include "player_playout.h"
 #include "player_stream.h"
+#include "player_update.h"
 
 extern void host_player_reset(void);
 extern void host_player_wifi_script(const char *ssid, bool ok, int disconnects, int reason);
 extern void host_player_resolve(const char *ip);
 extern void host_player_output_fail(bool fail);
 extern uint8_t host_player_light(void);
+extern void host_player_ota_record(bool present);
 extern int host_player_light_sets(void);
 
 static uint32_t g_now;
@@ -187,6 +190,43 @@ static void test_playing(void)
     free(body);
 }
 
+/* An image being written: Updating, two short flashes a second, over Ready and Play (R31, R38). */
+static void test_updating(void)
+{
+    program(NULL, 0);
+    pump(6);
+    CHECK_EQ(player_light_tick(0), PLAYER_LIGHT_READY, "the player would be ready");
+
+    player_ota_init();
+    pu_begin_t begin = {
+        .version = {0, 7, 0},
+        .board = PU_BOARD_ESP32,
+        .image_len = 4096,
+        .sig_len = 70,
+    };
+    memset(begin.sha256, 0x33, sizeof begin.sha256);
+    memset(begin.sig, 1, sizeof begin.sig);
+    uint8_t pkt[PU_BEGIN_SIZE];
+    CHECK_EQ(pu_begin_encode(&begin, pkt), PU_BEGIN_SIZE, "the begin encodes");
+    const uint8_t k7[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
+    player_ota_packet(k7, pkt, sizeof pkt);
+    player_ota_tick(g_now);
+    CHECK(player_ota_updating(), "the begin was taken");
+
+    CHECK_EQ(player_light_tick(50), PLAYER_LIGHT_UPDATING, "writing the image: updating");
+    CHECK_EQ(player_light_level(), PLAYER_LIGHT_BRIGHT, "the first flash");
+    CHECK_EQ(player_light_tick(150), PLAYER_LIGHT_UPDATING, "between the flashes");
+    CHECK_EQ(player_light_level(), 0, "dark");
+    CHECK_EQ(player_light_tick(250), PLAYER_LIGHT_UPDATING, "the second flash");
+    CHECK_EQ(player_light_level(), PLAYER_LIGHT_BRIGHT, "lit");
+    CHECK_EQ(player_light_tick(500), PLAYER_LIGHT_UPDATING, "and the rest of the second");
+    CHECK_EQ(player_light_level(), 0, "dark again, not Ready's steady dim");
+
+    /* Leave the machine where the next case expects it: a K7 that says nothing abandons. */
+    player_ota_tick(g_now + PLAYER_OTA_GAP_MS + 1);
+    CHECK(!player_ota_updating(), "and the act is over when the K7 goes quiet");
+}
+
 /* A body that is not audio: fault, and the 4 Hz pattern's two halves. */
 static void test_fault(void)
 {
@@ -236,6 +276,7 @@ int main(void)
 {
     test_searching();
     test_ready();
+    test_updating();
     test_playing();
     test_fault();
     test_no_output();

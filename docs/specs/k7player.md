@@ -35,7 +35,10 @@ boards on **2026-11-20** (B7, TN-04), without the 0.6.2 old-player fallback.
 | R5 | It has no Bluetooth, no volume and no control surface of any kind |
 | R6 | It reconnects on its own, and returns to searching when it has nothing left to retry |
 | R7 | It reports its state on one status light, with no other surface |
-| R8 | Every behaviour above has a host test except the six things § 6 marks board-only |
+| R8 | Every behaviour above has a host test except the seven things § 7 marks board-only |
+
+Its own firmware arrives over the air from the image a K7 carries (R34–R38), and that behaviour's
+host tests are the update's own, in [`player-update.md`](./player-update.md) §8.
 
 ### Out of scope, explicitly
 
@@ -48,8 +51,12 @@ boards on **2026-11-20** (B7, TN-04), without the 0.6.2 old-player fallback.
   because it has nowhere to show it.
 - **Any other stream.** It is not a general internet-radio client; the earlier research into one
   is evidence, not a backlog.
-- **Talking to the K7.** It sends one frame in its life — the handover request — and nothing else.
-- **Over-the-air updates.** Not in version one, for either device ([README](../../README.md)).
+- **Asking the K7 for anything.** It sends the handover request, its 100 ms status
+  (`espnow-stream.md` E3) and its answer to an update's probe (`player-update.md` U5); it never
+  asks for a stream, a Track or a setting.
+- **The K7's firmware.** The player's own arrives over the air
+  ([ADR 0116](../adr/0116-a-players-firmware-is-a-signed-image-the-k7-carries.md)); the K7's is
+  still its cable ([README](../../README.md)).
 
 ---
 
@@ -187,13 +194,14 @@ client; the K7 keeps no record of it or of the tone.
 
 ## 5. The status light
 
-**R31. Four states, and nothing between them:**
+**R31. Five states, and nothing between them:**
 
 | State | Meaning | Pattern |
 |---|---|---|
 | **Searching** | No network it can use: sweeping, or retrying a network that will not take it | 1 Hz blink |
 | **Ready** | On a network, no stream established: connecting, retrying, or nothing to play to | steady, dim |
 | **Playing** | The stream is established and audio is going out of an output | steady, bright |
+| **Updating** | It is writing the image a K7 handed it, from the packet it accepts until it reboots (R34–R38) | 1 Hz double-blink |
 | **Fault** | It cannot do its job for a reason the network is not (two seconds of frames that never decode, R26, or an output path that will not initialise) | 4 Hz blink |
 
 **R32. The light is the whole surface.** No beep, no screen, no web page, no button. A person
@@ -202,7 +210,32 @@ they would open is.
 
 ---
 
-## 6. Tests
+## 6. The update
+
+**R34. Its firmware arrives over the air, from a K7 it has no record of.** Any K7 holding the
+player's image may hand it over: the player answers the probe with its version, writes the image to
+its spare slot, verifies it and boots it. It is still bound to a K7 by what it stored and by
+nothing else, so re-provisioning to another K7 changes nothing about who may update it
+([`player-update.md`](./player-update.md), [ADR 0116](../adr/0116-a-players-firmware-is-a-signed-image-the-k7-carries.md)).
+
+**R35. It writes only the slot it is not running from**, one 4 KB block at a time, and the radio's
+callback does nothing but hand the packet to the task that writes.
+
+**R36. It never writes an image it cannot verify.** The board, the version, the SHA-256 and the
+signature are checked before the switch; a failure leaves the running image and the boot partition
+untouched (player-update.md U18).
+
+**R37. A new image proves itself by making sound.** It marks the image valid on the first frame
+that decodes and reaches the output after an update, and after ninety seconds without one it asks
+the bootloader to roll back. A boot with no update marker — the first boot after the cable — marks
+itself valid at once (player-update.md U20–U23).
+
+**R38. It lights Updating from the begin it accepts until the reboot**, and nothing else it could
+say is true while it is writing its own flash (R31).
+
+---
+
+## 7. Tests
 
 Host tests run the player's core against a scripted radio and a null output, so the receiver, the
 ring policy, the record's validation and the network preference are all shown wrong without a
@@ -214,7 +247,7 @@ board. The handover's own tests are in [`network-handover.md`](./network-handove
 | T2 | Three seconds without a packet is a silent stream and not a fault; two seconds of frames that never decode is a fault | host |
 | T3 | The ring holds the station's frames up to its 96 KB and never grows; an overrun clears it once and keeps the newest; an underrun repeats silence rather than blocking the receiver | host |
 | T4 | The record's validation and the preference order: home, then the K7's own network, then the 20 s/10 s alternation | host |
-| T5 | The state machine drives the four light states, including *Fault* when two seconds of delivered frames never decode | host |
+| T5 | The state machine drives the five light states, including *Updating* while an image is written and *Fault* when two seconds of delivered frames never decode | host |
 | T6 | The station rate from the frame header configures the line output; a 32 kHz station opens it at 32 000 | host |
 | T7 | The output holds silence while the ring is shallow even with audio in it, and plays once it holds the buffer | host |
 | T8 | The player's tone is the K7's: a tone packet sets the four targets, a boost and a cut reach the PCM after the glide, no packet is neutral, a malformed packet is ignored, and a rate change keeps the targets | host |
@@ -223,7 +256,7 @@ board. The handover's own tests are in [`network-handover.md`](./network-handove
 | B3 | An outage longer than the ring is one discontinuity, not a stream of them: `flushed` counts them | **board only** |
 | B4 | Ten minutes of Wi-Fi with the stream: outages, underruns and discarded audio counted, and the line's own rate beside them | **board only** |
 | B5 | The memory census with the stream, the decoder, the ring and the Wi-Fi up | **board only** |
-| B6 | The light's four patterns, by eye | **board only** |
+| B6 | The light's five patterns, by eye | **board only** |
 | B7 | The tone on the board: with a new K7 and a new player a knob is heard at once; with an old player the S3 tone and the late knob stand; a browser hears the flat stream while the player owns the tone; a player reboot restores the tone within a second | **board only** |
 
 **Measured on the board, 2026-11-18**, with a WROOM-32 and a PCM5102A, the K7 on `192.168.0.13`:
@@ -243,7 +276,7 @@ frames, 174 resent, 22670 held, 2 dropped, 2757 packets, a player is listening`,
 
 ---
 
-## 7. Open questions
+## 8. Open questions
 
 1. **Does the board exist? Answered.** The first target is a WROOM-32 devkit with a PCM5102A, and
    it is the board every run above used. The PCB follows B4 and B5, because those two numbers

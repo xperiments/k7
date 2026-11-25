@@ -4,4 +4,4 @@
 idf_component_register(SRCS "menu.c" "pad.c"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "."
-                       REQUIRES cassette library mini_icecast playlist_file)
+                       REQUIRES cassette library mini_icecast playlist_file player_update_act)

@@ -67,6 +67,8 @@ INC := -I$(HERE)/include \
        -I$(ROOT)/components/portable/wifi_record/include \
        -I$(ROOT)/components/portable/handover/include \
        -I$(ROOT)/components/portable/espnow_stream/include \
+       -I$(ROOT)/components/portable/player_update/include \
+       -I$(ROOT)/components/portable/player_update_act/include \
        -I$(ROOT)/components/portable/share/include \
        -I$(ROOT)/components/portable/setup/include \
        -I$(ROOT)/components/portable/dr_libs/include \
@@ -104,6 +106,8 @@ PROD_SRC := \
   $(ROOT)/components/portable/mini_icecast/mi_decode.c \
   $(ROOT)/components/portable/mini_icecast/mi_resample.c \
   $(ROOT)/components/portable/espnow_stream/espnow_stream.c \
+  $(ROOT)/components/portable/player_update/player_update.c \
+  $(ROOT)/components/portable/player_update_act/player_update_act.c \
   $(ROOT)/components/portable/tone_eq/tone_eq.c \
   $(ROOT)/components/portable/mini_files/mini_files.c \
   $(ROOT)/components/portable/cassette/cassette.c \
@@ -152,6 +156,8 @@ PROD_SRC := \
 
 vpath %.c $(ROOT)/components/portable/http_server \
           $(ROOT)/components/portable/espnow_stream \
+          $(ROOT)/components/portable/player_update \
+          $(ROOT)/components/portable/player_update_act \
           $(ROOT)/components/portable/json \
           $(ROOT)/components/portable/card_use \
           $(ROOT)/components/portable/card_path \
@@ -197,7 +203,8 @@ MENU_OBJ := $(OBJ)/menu.o
 SVC_OBJ := $(OBJ)/card_use.o $(OBJ)/card_path.o $(OBJ)/http_json.o $(OBJ)/playlist_http.o $(OBJ)/snapshot_http.o $(OBJ)/covers_http.o $(OBJ)/app_services.o $(OBJ)/art.o $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/library_http.o $(OBJ)/mcp.o $(OBJ)/snapshot.o $(OBJ)/front_door.o $(OBJ)/playlist_file.o $(OBJ)/playlist_select.o $(OBJ)/flash_job.o $(OBJ)/setup.o $(OBJ)/setup_http.o $(OBJ)/wifi_record.o $(OBJ)/device_name.o
 HTTP_OBJ := $(OBJ)/http_server.o $(OBJ)/http_parse.o $(OBJ)/http_loop.o $(OBJ)/http_backend_single.o $(OBJ)/mini_icecast.o $(OBJ)/mi_shuffle.o $(OBJ)/mini_files.o $(BURST_OBJ)
 SERVER   := $(BIN)/icecast_host
-SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o $(OBJ)/art_store_host.o
+UPDATE_OBJ := $(OBJ)/player_update.o $(OBJ)/player_update_act.o
+SERVER_OBJ := $(CORE_OBJ) $(HTTP_OBJ) $(SVC_OBJ) $(UPDATE_OBJ) $(OBJ)/share.o $(OBJ)/handover_frame.o $(OBJ)/handover_key.o $(OBJ)/board_host.o $(OBJ)/icecast_host.o $(OBJ)/art_store_host.o
 
 TOOLS := $(BIN)/mi_bench $(BIN)/mi_encode_file $(BIN)/mi_frames
 # The harness helpers are Python; override PYTHON where the default python3 is not the
@@ -218,7 +225,8 @@ TESTS := $(BIN)/t01_shine_behaviour $(BIN)/t02_encoder_pipeline \
          $(BIN)/t36_wifi_record $(BIN)/t38_setup $(BIN)/t39_shuffle_default \
          $(BIN)/t40_playlist_file $(BIN)/t41_handover $(BIN)/t42_share \
          $(BIN)/t43_espnow_stream $(BIN)/t44_espnow_emitter \
-         $(BIN)/t45_station_restart $(BIN)/t46_art_pack $(BIN)/t49_name $(BIN)/t50_device_name
+         $(BIN)/t45_station_restart $(BIN)/t46_art_pack $(BIN)/t47_player_update \
+         $(BIN)/t48_player_update_act $(BIN)/t49_name
 
 .PHONY: all test integration layering label player check tools fixtures bench control control-check clean help
 
@@ -413,6 +421,14 @@ $(BIN)/t45_station_restart: $(CORE_OBJ) $(HTTP_OBJ) $(OBJ)/t45_station_restart.o
 # The K7Art pack and the two-sheet pool: the pack header and CRC, the sheet at its
 # offset, the design-count agreement, the factory-first mapping and the fallback.
 $(BIN)/t46_art_pack: $(OBJ)/label.o $(OBJ)/label_pack.o $(OBJ)/label_pool.o $(OBJ)/t46_art_pack.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t47_player_update: $(OBJ)/player_update.o $(OBJ)/handover_key.o $(OBJ)/t47_player_update.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
+$(BIN)/t48_player_update_act: $(OBJ)/player_update_act.o $(OBJ)/player_update.o $(OBJ)/t48_player_update_act.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 

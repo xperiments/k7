@@ -94,6 +94,16 @@ void player_board_espnow_set_tone(player_board_packet_fn on_tone);
  * the K7 learns the player's from the packet's own source address. */
 bool player_board_espnow_send(const uint8_t *data, size_t len);
 
+/* One frame to the K7 that just asked. The update is the one exchange the player answers
+ * directly: it has no stored address for the sender, so this registers it as a plaintext peer
+ * the first time and sends (player-update.md U7a). */
+bool player_board_espnow_send_to(const uint8_t dst[6], const uint8_t *data, size_t len);
+
+/* The update's frames, on the Wi-Fi task: the callback parses and copies, and every flash
+ * write happens on player_ota's own task. Same rule as the audio's (espnow-stream.md E11). */
+typedef void (*player_board_update_fn)(const uint8_t src[6], const uint8_t *data, size_t len);
+void player_board_espnow_set_update(player_board_update_fn on_update);
+
 /* One frame to the K7. The request is unicast to the address the beacon came from. */
 bool player_board_handover_send(const uint8_t *dst, const uint8_t *data, size_t len);
 
@@ -114,6 +124,54 @@ bool player_board_set_channel(uint8_t channel);
 void player_board_random(uint8_t *out, size_t len);
 bool player_board_x25519_public(const uint8_t priv[32], uint8_t pub[32]);
 bool player_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_t shared[32]);
+
+/* ------------------------------------------------------------ the update's flash
+ *
+ * player-update.md U18-U25, ADR 0117. The player writes the slot it is not running from, one
+ * 4 KB block at a time; the running firmware verifies the bytes before it switches, and the
+ * marker decides, on the next boot, whether the new image has to prove itself.
+ */
+
+/* The running image's version, from the application descriptor ("0.6.2"). */
+const char *player_board_version(void);
+
+/* True when an over-the-air image is waiting to prove itself; copies the version that update
+ * installed, so a boot of the old image after a rollback can tell it is not the one. */
+bool player_board_ota_pending(char *version, size_t cap);
+
+/* The spare slot's size in bytes; 0 when there is no spare slot (a table without OTA). */
+uint32_t player_board_ota_slot_size(void);
+
+/* Erase and open the spare slot for `image_len` bytes. False when it will not hold them. */
+bool player_board_ota_begin(uint32_t image_len);
+
+/* Append `len` bytes at the running offset. Sequential, like every OTA write: the caller only
+ * ever gives the next block. */
+bool player_board_ota_write(uint32_t offset, const uint8_t *data, size_t len);
+
+/* Discard a half-written slot. The running image is untouched. */
+void player_board_ota_abort(void);
+
+/* The image in the spare slot, checked before it can boot (U18): its chip, its own application
+ * descriptor against the `version` the header claimed, the digest of the bytes written, and the
+ * signature over them with the public key compiled into this firmware. This is the one ECDSA in
+ * the player's path, and it is the board's because it is mbedTLS's (ADR 0117's consequence). */
+bool player_board_ota_verify(const char *version, const uint8_t sha256[32], const uint8_t *sig,
+                             size_t sig_len);
+
+/* End the write, switch the boot partition and write the marker naming `version` — the image
+ * that will boot. False leaves the running image the one that boots. */
+bool player_board_ota_commit(const char *version);
+
+/* This image is good: cancel the rollback (U21, U22). */
+void player_board_ota_mark_valid(void);
+
+/* This image is not good: ask the bootloader to put the other slot back. On the board it does
+ * not return. */
+void player_board_ota_rollback(void);
+
+/* Reboot into the image just committed, after a moment for the last frame to leave. */
+void player_board_ota_reboot(void);
 
 #ifdef __cplusplus
 }

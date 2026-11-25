@@ -10,6 +10,7 @@
 #include "sdkconfig.h"
 
 #include "player_light.h"
+#include "player_ota.h"
 #include "player_playout.h"
 #include "player_stream.h"
 #include "player_tone.h"
@@ -39,6 +40,14 @@ void app_main(void)
     /* The last stage: the ring's frames decoded and sent to the line output. */
     player_playout_init();
     player_playout_start_task();
+
+    /* The image a K7 hands over: its marker and rollback clock first, so a boot after an update
+     * is the one that has to prove itself, then the task that writes the spare slot. */
+    player_ota_init();
+    player_ota_start_task();
+    /* The update's frames reach player_ota from the radio's callback: without this the player
+     * would hear a probe and drop it, which looks exactly like a K7 that found nobody. */
+    player_board_espnow_set_update(player_ota_packet);
 
     /* The whole surface: one LED, four states, decided from the three machines above. */
     player_light_init();

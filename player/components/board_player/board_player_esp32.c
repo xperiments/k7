@@ -26,6 +26,15 @@
 #include "espnow_stream.h"
 #include "esp_random.h"
 #include "esp_wifi.h"
+#include "freertos/task.h"
+
+#include "esp_app_format.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "esp_system.h"
+#include "mbedtls/pk.h"
+#include "psa/crypto.h"
+#include "player_update.h"
 #include "mdns.h"
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -164,6 +173,7 @@ static player_board_frame_fn s_frame_cb;
 static void *s_frame_ctx;
 static player_board_packet_fn s_audio_cb;
 static player_board_packet_fn s_tone_cb;
+static player_board_update_fn s_update_cb;
 
 /* The radio is the board's and it has two callers, so it is initialised once and stays up while
  * either of them needs it (the K7's rule, mirrored: espnow-stream.md E10). */
@@ -188,6 +198,12 @@ static void recv_cb(const esp_now_recv_info_t *info, const uint8_t *data, int le
     }
     if (data[0] == ES_VERSION && data[1] == ES_TYPE_TONE) {
         if (s_tone_cb) s_tone_cb(data, (size_t)len);
+        return;
+    }
+    /* The update's six frames (player-update.md U4-U16): they carry their own version byte and
+     * their type is above the stream's, so one dispatch serves the whole radio. */
+    if (data[0] == PU_VERSION && data[1] >= PU_TYPE_PROBE && data[1] <= PU_TYPE_RESULT) {
+        if (s_update_cb) s_update_cb(info->src_addr, data, (size_t)len);
         return;
     }
     if (!s_frame_cb || len <= 0) return;
@@ -381,4 +397,195 @@ bool player_board_init(void)
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_DEFAULT),
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT));
     return true;
+}
+
+
+/* ------------------------------------------------------------ the update
+ *
+ * player-update.md U10-U25, ADR 0117. The spare slot is the OTA partition the bootloader would
+ * boot next; the marker in NVS is what makes the boot after an update the one that has to prove
+ * itself. The digest is PSA's and the signature is mbedTLS's: the curve is not ours to write.
+ */
+
+#define OTA_MARKER_KEY "ota"
+
+/* The public key CI checks with and the firmware verifies with, embedded from the file the
+ * release's signature is verified against (player/release-key.pub.pem). */
+extern const uint8_t release_key_pub_pem_start[] asm("_binary_release_key_pub_pem_start");
+extern const uint8_t release_key_pub_pem_end[] asm("_binary_release_key_pub_pem_end");
+
+static esp_ota_handle_t s_ota;
+static const esp_partition_t *s_ota_part;
+static uint32_t s_ota_len;
+
+void player_board_espnow_set_update(player_board_update_fn on_update) { s_update_cb = on_update; }
+
+bool player_board_espnow_send_to(const uint8_t dst[6], const uint8_t *data, size_t len)
+{
+    if (!s_now_on || !dst || !data || len == 0 || len > ESP_NOW_MAX_DATA_LEN) return false;
+
+    esp_err_t e = esp_now_send(dst, data, len);
+    if (e == ESP_OK) return true;
+    if (e != ESP_ERR_ESPNOW_NOT_FOUND) return false;
+
+    /* The K7 that asks is not a peer after a reboot: register it plaintext (the update's frames
+     * are public bytes, and the signature is what makes them safe) and send (U7a). */
+    esp_now_peer_info_t peer;
+    memset(&peer, 0, sizeof peer);
+    memcpy(peer.peer_addr, dst, ESP_NOW_ETH_ALEN);
+    peer.channel = 0;
+    peer.ifidx = WIFI_IF_STA;
+    peer.encrypt = false;
+    e = esp_now_add_peer(&peer);
+    if (e != ESP_OK && e != ESP_ERR_ESPNOW_EXIST) return false;
+    return esp_now_send(dst, data, len) == ESP_OK;
+}
+
+const char *player_board_version(void) { return esp_app_get_description()->version; }
+
+bool player_board_ota_pending(char *version, size_t cap)
+{
+    if (!version || !cap) return false;
+    version[0] = '\0';
+    nvs_handle_t h;
+    if (nvs_open(RECORD_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return false;
+    size_t len = cap;
+    esp_err_t e = nvs_get_str(h, OTA_MARKER_KEY, version, &len);
+    nvs_close(h);
+    return e == ESP_OK;
+}
+
+static void marker_clear(void)
+{
+    nvs_handle_t h;
+    if (nvs_open(RECORD_NAMESPACE, NVS_READWRITE, &h) != ESP_OK) return;
+    (void)nvs_erase_key(h, OTA_MARKER_KEY);
+    (void)nvs_commit(h);
+    nvs_close(h);
+}
+
+uint32_t player_board_ota_slot_size(void)
+{
+    const esp_partition_t *part = esp_ota_get_next_update_partition(NULL);
+    return part ? (uint32_t)part->size : 0;
+}
+
+bool player_board_ota_begin(uint32_t image_len)
+{
+    player_board_ota_abort();
+    s_ota_part = esp_ota_get_next_update_partition(NULL);
+    if (!s_ota_part || image_len == 0 || image_len > s_ota_part->size) return false;
+    s_ota_len = image_len;
+    return esp_ota_begin(s_ota_part, image_len, &s_ota) == ESP_OK;
+}
+
+bool player_board_ota_write(uint32_t offset, const uint8_t *data, size_t len)
+{
+    (void)offset; /* esp_ota_write is sequential; player_ota only ever hands it the next block */
+    if (!s_ota || !data || len == 0) return false;
+    return esp_ota_write(s_ota, data, len) == ESP_OK;
+}
+
+void player_board_ota_abort(void)
+{
+    if (!s_ota) return;
+    (void)esp_ota_abort(s_ota);
+    s_ota = 0;
+    s_ota_part = NULL;
+    s_ota_len = 0;
+}
+
+bool player_board_ota_verify(const char *version, const uint8_t sha256[32], const uint8_t *sig,
+                             size_t sig_len)
+{
+    if (!s_ota_part || !s_ota_len || !version || !sha256 || !sig || sig_len == 0) return false;
+
+    /* The image must be this chip's (the header's chip id at offset 12), and its own
+     * application descriptor must agree with the version the header claimed: the digest binds
+     * the image's bytes, the header's version is the one field the digest does not cover. */
+    uint16_t chip_id = 0;
+    if (esp_partition_read(s_ota_part, 12, &chip_id, sizeof chip_id) != ESP_OK) return false;
+    if (chip_id != ESP_CHIP_ID_ESP32) {
+        ESP_LOGW(TAG, "the image is for chip %u, not this one", (unsigned)chip_id);
+        return false;
+    }
+    esp_app_desc_t desc;
+    if (esp_partition_read(s_ota_part, 0x20, &desc, sizeof desc) != ESP_OK) return false;
+    if (desc.magic_word != ESP_APP_DESC_MAGIC_WORD) return false;
+    if (strncmp(desc.version, version, sizeof desc.version) != 0) {
+        ESP_LOGW(TAG, "the image says %s, the header said %s", desc.version, version);
+        return false;
+    }
+    if (strncmp(desc.project_name, "k7player", sizeof desc.project_name) != 0) return false;
+
+    if (psa_crypto_init() != PSA_SUCCESS) return false;
+
+    /* The digest of what is actually in the slot, read back: a write that did not land is a
+     * verify that does not pass. */
+    psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+    if (psa_hash_setup(&op, PSA_ALG_SHA_256) != PSA_SUCCESS) return false;
+    uint8_t chunk[512];
+    for (uint32_t off = 0; off < s_ota_len;) {
+        size_t n = s_ota_len - off;
+        if (n > sizeof chunk) n = sizeof chunk;
+        if (esp_partition_read(s_ota_part, off, chunk, n) != ESP_OK) {
+            psa_hash_abort(&op);
+            return false;
+        }
+        if (psa_hash_update(&op, chunk, n) != PSA_SUCCESS) {
+            psa_hash_abort(&op);
+            return false;
+        }
+        off += (uint32_t)n;
+    }
+    uint8_t digest[32];
+    size_t digest_len = 0;
+    if (psa_hash_finish(&op, digest, sizeof digest, &digest_len) != PSA_SUCCESS || digest_len != 32)
+        return false;
+    if (memcmp(digest, sha256, 32) != 0) return false;
+
+    /* The signature over that digest, with the key the release publishes. */
+    mbedtls_pk_context key;
+    mbedtls_pk_init(&key);
+    size_t pem_len = (size_t)(release_key_pub_pem_end - release_key_pub_pem_start);
+    int rc = mbedtls_pk_parse_public_key(&key, release_key_pub_pem_start, pem_len);
+    if (rc == 0)
+        rc = mbedtls_pk_verify(&key, MBEDTLS_MD_SHA256, digest, sizeof digest, sig, sig_len);
+    mbedtls_pk_free(&key);
+    return rc == 0;
+}
+
+bool player_board_ota_commit(const char *version)
+{
+    if (!s_ota || !s_ota_part || !version) return false;
+    esp_err_t e = esp_ota_end(s_ota);
+    s_ota = 0;
+    if (e != ESP_OK) return false;
+    if (esp_ota_set_boot_partition(s_ota_part) != ESP_OK) return false;
+
+    nvs_handle_t h;
+    if (nvs_open(RECORD_NAMESPACE, NVS_READWRITE, &h) != ESP_OK) return false;
+    e = nvs_set_str(h, OTA_MARKER_KEY, version);
+    if (e == ESP_OK) e = nvs_commit(h);
+    nvs_close(h);
+    return e == ESP_OK;
+}
+
+void player_board_ota_mark_valid(void)
+{
+    (void)esp_ota_mark_app_valid_cancel_rollback();
+    marker_clear();
+}
+
+void player_board_ota_rollback(void)
+{
+    (void)esp_ota_mark_app_invalid_rollback_and_reboot();
+    esp_restart(); /* the call above does not return */
+}
+
+void player_board_ota_reboot(void)
+{
+    /* Two hundred and fifty milliseconds for the result frame to leave the radio. */
+    vTaskDelay(pdMS_TO_TICKS(250));
+    esp_restart();
 }

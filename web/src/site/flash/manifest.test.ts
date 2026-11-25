@@ -12,23 +12,27 @@ describe('the releases the Site offers', () => {
   it('takes K7\'s version, offsets and parts from its manifest', () => {
     const { firmware } = boardById('k7');
     expect(firmware.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(firmware.parts.map((part) => part.offset)).toEqual([0x0, 0x8000, 0x10000]);
-    expect(firmware.parts.map((part) => part.file)).toEqual([
-      'bootloader.bin',
-      'partition-table.bin',
-      'sd_stream_server.bin',
+    const parts = firmware.parts.map((part) => [part.offset, part.file]);
+    expect(parts.slice(0, 3)).toEqual([
+      [0x0, 'bootloader.bin'],
+      [0x8000, 'partition-table.bin'],
+      [0x10000, 'sd_stream_server.bin'],
     ]);
+    /* The fourth part arrived with ADR 0116: the player's signed image, and only it. */
+    for (const part of parts.slice(3)) expect(part).toEqual([0x710000, 'k7player.img']);
   });
 
   it('takes the K7Player\'s from its own, with the bootloader at 0x1000', () => {
     const { firmware } = boardById('player');
     expect(firmware.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(firmware.parts.map((part) => part.offset)).toEqual([0x1000, 0x8000, 0x10000]);
-    expect(firmware.parts.map((part) => part.file)).toEqual([
-      'bootloader.bin',
-      'partition-table.bin',
-      'k7player.bin',
+    const parts = firmware.parts.map((part) => [part.offset, part.file]);
+    expect(parts.slice(0, 2)).toEqual([
+      [0x1000, 'bootloader.bin'],
+      [0x8000, 'partition-table.bin'],
     ]);
+    expect(parts).toContainEqual([0x10000, 'k7player.bin']);
+    /* The two-slot table also brings otadata's initial image (ADR 0117). */
+    for (const [offset] of parts.slice(2)) expect([0x390000, 0x10000]).toContain(offset);
     expect(firmware.chip).toBe('esp32');
     expect(firmware.flash).toEqual({ mode: 'dio', size: '4MB', freq: '40m' });
   });

@@ -7,6 +7,8 @@
  */
 #include "app_services.h"
 
+#include "player_update_act.h"
+
 #include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -626,6 +628,38 @@ esp_err_t app_services_station_restart(uint32_t kbps)
     return ESP_OK;
 }
 
+/* The update's silence: the station stops while an image travels and starts again after it
+ * (player-update.md U27), which is the restart's two halves with a gap in the middle. The Track
+ * that was playing is asked for again, as a restart does. */
+/* The same bound as the station's own path, so the copy cannot truncate. */
+static char s_paused_path[sizeof(((mini_icecast_status_t *)0)->path)];
+static bool s_paused;
+
+esp_err_t app_services_station_pause(void)
+{
+    if (!s_cfg.music_dir) return ESP_ERR_INVALID_STATE;
+    if (s_paused) return ESP_OK;
+    mini_icecast_status_t st;
+    mini_icecast_status(&st);
+    snprintf(s_paused_path, sizeof s_paused_path, "%s", st.path);
+    s_paused = true;
+    mini_icecast_stop();
+    return ESP_OK;
+}
+
+esp_err_t app_services_station_resume(void)
+{
+    if (!s_paused) return ESP_OK;
+    s_paused = false;
+    const library_t *lib = library_acquire();
+    esp_err_t e = start_station(lib);
+    if (lib) library_release(lib);
+    if (e != ESP_OK) return e;
+    if (!mini_icecast_order_active() && s_paused_path[0] && !mini_icecast_play(s_paused_path))
+        ESP_LOGW(TAG, "the Track that was playing is not in the Library; the station walks on");
+    return ESP_OK;
+}
+
 esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_t *report)
 {
     app_services_report_t local;
@@ -671,6 +705,10 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
      * closes. The exception H13 now names: when the player's audio travels over ESP-NOW the
      * radio is up from boot and the window only borrows it (espnow-stream.md E10). */
     share_init();
+
+    /* The player's update: the act's image and its frames are registered here, so the Player
+     * list has something to ask from the moment the panel is up (ADR 0117). */
+    app_services_player_update_init();
 
     /* 3. The card. A missing card is a report, not a failure (R8). */
     app_board_card_t card = app_board_card_mount(cfg->music_dir);
@@ -895,4 +933,176 @@ esp_err_t app_services_start(const app_services_cfg_t *cfg, app_services_report_
     xTaskCreatePinnedToCore(card_watch_task, "card_watch", 4096, NULL, 2, NULL, 0);
 
     return ESP_OK;
+}
+
+
+/* ---------------------------------------------------------------- the player's update
+ *
+ * The act is player_update_act's: it decides, this file gives it the station, the image and the
+ * board's radio. The act is touched by two tasks - the update task that ticks it and the radio's
+ * worker that hands it frames - so one lock covers it, held for a tick's work and for a frame.
+ */
+
+static pua_t s_update_act;
+static SemaphoreHandle_t s_update_lock;
+static TaskHandle_t s_update_task;
+static volatile int s_update_cmd; /* 1 probe, 2 update, 3 cancel */
+
+static uint32_t update_now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+
+static bool update_send(void *ctx, const uint8_t *dst, const uint8_t *pkt, size_t len)
+{
+    (void)ctx;
+    static const uint8_t bcast[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+    return app_board_player_update_send(dst ? dst : bcast, pkt, len);
+}
+
+static bool update_image_read(void *ctx, uint32_t offset, uint8_t *out, size_t len)
+{
+    (void)ctx;
+    return app_board_player_image_read(offset, out, len);
+}
+
+/* The act owns the radio while it runs (player-update.md U29): the emitter is switched off
+ * first, or its resends answer the player's status while the blocks are in flight — measured on
+ * the bench as ESP_ERR_ESPNOW_NO_MEM and five frames lost to a full queue. The station stops
+ * second, and comes back before the emitter, so the player's status is what re-adopts its peer. */
+static void update_station_stop(void *ctx)
+{
+    (void)ctx;
+    (void)app_board_audio_set(false);
+    (void)app_services_station_pause();
+}
+
+static void update_station_start(void *ctx)
+{
+    (void)ctx;
+    (void)app_services_station_resume();
+    if (app_services_player_espnow()) (void)app_board_audio_set(true);
+}
+
+static const pua_seam_t UPDATE_SEAM = {
+    .send = update_send,
+    .image_read = update_image_read,
+    .station_stop = update_station_stop,
+    .station_start = update_station_start,
+};
+
+/* The radio's worker, on the frame's arrival: it may send the next block, which is why it runs
+ * there and not on the Wi-Fi task (espnow-stream.md E11, player-update.md U29). */
+static void update_frame(const uint8_t src[6], const uint8_t *data, size_t len, void *ctx)
+{
+    (void)ctx;
+    if (!s_update_lock || xSemaphoreTake(s_update_lock, portMAX_DELAY) != pdTRUE) return;
+    pua_frame(&s_update_act, src, data, len, update_now_ms());
+    xSemaphoreGive(s_update_lock);
+}
+
+static void update_task(void *arg)
+{
+    (void)arg;
+    for (;;) {
+        int cmd = s_update_cmd;
+        s_update_cmd = 0;
+        if (s_update_lock && xSemaphoreTake(s_update_lock, portMAX_DELAY) == pdTRUE) {
+            uint32_t now = update_now_ms();
+            if (cmd == 1) pua_start(&s_update_act, now, false);
+            else if (cmd == 2) pua_start(&s_update_act, now, true);
+            else if (cmd == 3) pua_stop(&s_update_act);
+            pua_tick(&s_update_act, now);
+
+            /* The act's own account, for a person reading the console: the row has it too. */
+            static pua_state_t logged_state = PUA_IDLE;
+            static int logged_serving = -1;
+            pua_state_t state = pua_state(&s_update_act);
+            int serving = pua_serving(&s_update_act);
+
+            /* The blocks, every 32 of them: the row has the percentage, the console wants the
+             * progress to be visible when a transfer stalls. */
+            static int logged_blocks = -1;
+            int done_blocks = pua_blocks_done(&s_update_act);
+            if (state == PUA_BLOCKS && done_blocks != logged_blocks &&
+                (done_blocks < 2 || done_blocks % 32 == 0)) {
+                logged_blocks = done_blocks;
+                ESP_LOGI(TAG, "update: block %d of %d", done_blocks,
+                         pua_blocks_total(&s_update_act));
+            }
+            if (state != logged_state || serving != logged_serving) {
+                logged_state = state;
+                logged_serving = serving;
+                if (state == PUA_PROBING) ESP_LOGI(TAG, "update: probing");
+                else if (state == PUA_DONE) ESP_LOGI(TAG, "update: done: %s", pua_outcome(&s_update_act));
+                else if (serving) {
+                    ESP_LOGI(TAG, "update: player %d of %d, %s", serving,
+                             pua_stale_total(&s_update_act),
+                             state == PUA_VERIFYING ? "verifying"
+                                                    : state == PUA_BLOCKS ? "blocks" : "begin");
+                }
+            }
+            xSemaphoreGive(s_update_lock);
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+
+void app_services_player_update_init(void)
+{
+    if (s_update_task) return;
+    if (!s_update_lock) s_update_lock = xSemaphoreCreateMutex();
+    pua_init(&s_update_act, &UPDATE_SEAM, NULL);
+
+    app_board_player_image_t image;
+    if (app_board_player_image(&image) && image.loaded)
+        pua_set_image(&s_update_act, image.version, image.image_len, image.sha256, image.sig,
+                      image.sig_len);
+
+    app_board_player_update_frames(update_frame, NULL);
+    if (xTaskCreatePinnedToCore(update_task, "update", 5120, NULL, 3, &s_update_task, 0) != pdPASS) {
+        s_update_task = NULL;
+        ESP_LOGE(TAG, "no memory for the update task");
+    }
+}
+
+void app_services_player_update_probe(void)
+{
+    if (!app_services_player_espnow()) return; /* U8: with HTTP there is nothing to hear */
+    s_update_cmd = 1;
+}
+
+void app_services_player_update_start(void)
+{
+    if (!app_services_player_espnow()) return;
+    s_update_cmd = 2;
+}
+
+void app_services_player_update_cancel(void) { s_update_cmd = 3; }
+
+void app_services_player_update_status(app_services_player_update_t *out)
+{
+    if (!out) return;
+    memset(out, 0, sizeof *out);
+    if (!s_update_lock || xSemaphoreTake(s_update_lock, portMAX_DELAY) != pdTRUE) return;
+
+    out->loaded = s_update_act.loaded;
+    if (out->loaded) pu_version_format(s_update_act.image_version, out->image);
+    out->state = (int)s_update_act.state;
+    out->found = pua_found(&s_update_act);
+    out->stale = pua_stale(&s_update_act);
+    out->serving = pua_serving(&s_update_act);
+    out->serving_total = pua_stale_total(&s_update_act);
+    int done = pua_blocks_done(&s_update_act), total = pua_blocks_total(&s_update_act);
+    out->percent = total > 0 ? done * 100 / total : 0;
+    out->served = s_update_act.served;
+    out->failed = s_update_act.failed;
+    for (int i = 0; i < pua_found(&s_update_act); i++) {
+        const pua_player_t *p = pua_player(&s_update_act, i);
+        if (!p) continue;
+        int direction = pu_version_cmp(p->version, s_update_act.image_version);
+        if (direction == 0) continue;
+        pu_version_format(p->version, out->from);
+        out->direction = direction;
+        break;
+    }
+    snprintf(out->outcome, sizeof out->outcome, "%s", pua_outcome(&s_update_act));
+    xSemaphoreGive(s_update_lock);
 }

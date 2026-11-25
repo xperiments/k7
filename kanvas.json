@@ -57,6 +57,14 @@
     {
       "id": "K7",
       "name": "K7Art"
+    },
+    {
+      "id": "PU",
+      "name": "Player update"
+    },
+    {
+      "id": "HA",
+      "name": "Home Assistant"
     }
   ],
   "tasks": [
@@ -3986,7 +3994,7 @@
     {
       "id": "K7-17",
       "title": "The lock stays visible, and every tooltip waits a beat",
-      "state": "review",
+      "state": "done",
       "group": "K7",
       "deps": ["K7-16"],
       "at": "2026-11-22T03:11:17Z",
@@ -4002,6 +4010,264 @@
           "at": "2026-11-22T03:13:27Z",
           "by": "deepseek",
           "text": "K7-17 is landed in 6bcd6e7.\n\nEvery Layers row now shows its lock at rest — the layer and group rows, with the group's eye beside it — and every tooltip waits 300 ms before it opens, so sweeping a row no longer flashes labels. The labels and positions are unchanged.\n\nVerified: typecheck, 101 unit tests, 24 browser tests (four locks visible, the group lock, and a tooltip that is absent immediately then visible after the pause), build and skill:check; the host label target's 184 sheet checks. The headless label-page boot skipped on a Chrome GPU failure; the browser suite boots the page.\n\nTo check: open /k7art — the lock is visible on every row; hover a row and the tooltip appears after a beat; sweep across several rows and no trail appears."
+        }
+      ]
+    },
+    {
+      "id": "PU-01",
+      "title": "The update's bytes",
+      "state": "done",
+      "group": "PU",
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "The format both boards speak: the 128-byte header a player image is wrapped in (version, SHA-256, signature), and the six ESP-NOW frames that find a player, claim an image and move it in 4 KB blocks. Finished when the header and every frame round-trip on the host, a malformed one is refused, and the version rule is shown both ways. Spec: docs/specs/player-update.md §1-§4; ADR 0116.",
+      "notes": [
+        {
+          "at": "2026-11-24T01:30:41Z",
+          "by": "dsh",
+          "text": "Plan: the portable header and frames, then the host tests."
+        },
+        {
+          "at": "2026-11-24T01:35:15Z",
+          "by": "dsh",
+          "text": "The update's bytes are built and host-proven. components/portable/player_update holds the 128-byte header (magic, version, board, image length, SHA-256, DER signature) and the six frames - probe, answer, begin, 4 KB block, acknowledgement, result - plus the version rule and the block count. t47_player_update runs 333 checks: every field read back out of the packet at the offset the spec's table names, and every way a packet can be damaged refused. make -C host check is green and the K7's firmware build is unchanged. What to check: the header and begin field order against player-update.md U1 and U10. No firmware caller yet - PU-04 sends and PU-03 receives - so there is nothing to flash."
+        }
+      ]
+    },
+    {
+      "id": "PU-02",
+      "title": "The release signs the image, and the K7's flash carries it",
+      "state": "done",
+      "group": "PU",
+      "deps": ["PU-01"],
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "A K7 that has been flashed over USB can update its players with no computer and no network: the player's release is signed, the image lives in a 2 MB partition on the K7, and the browser flash writes it as a fourth part. Finished when a K7 flashed from the page reports the image's version, and a release without the signing key is refused. Spec: player-update.md U1-U3; k7-site.md F3, R2-R6; ADR 0116.",
+      "notes": [
+        {
+          "at": "2026-11-24T02:38:39Z",
+          "by": "dsh",
+          "text": "Plan: sign in release_publish, the K7's fourth part and partition, CI's verify, then a rehearsal in a temp tree."
+        },
+        {
+          "at": "2026-11-24T02:52:31Z",
+          "by": "dsh",
+          "text": "A K7 flashed from the Site carries the player's signed image. The player's release signs k7player.bin (ECDSA P-256 over its SHA-256, in the 128-byte header) with the key at ~/.config/k7/release-key.pem and publishes k7player.img plus its manifest entry; the K7's release refuses to run without that image, verifies it against the committed public key, and adds it as the fourth part at 0x710000, where the new player partition sits. CI verifies size, hash, header and signature with the committed key. Rehearsed in a temporary tree at 0.7.0 from the real build directories: both releases published, the image verified by openssl and by the checker, the K7's part cross-checked against the player's bytes; a missing key, a missing image and a tampered image were all refused. The committed 0.6.2 release is untouched - the next release is the first with four parts. Nothing flashed. What to check: that the four parts at 0.0, 0x8000, 0x10000 and 0x710000 are what the page will write."
+        }
+      ]
+    },
+    {
+      "id": "PU-03",
+      "title": "The player's second slot, its verify and its rollback",
+      "state": "done",
+      "group": "PU",
+      "deps": ["PU-01"],
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "The player can take a new image and come back if it is bad: two 1.75 MB OTA slots, the receive path that writes only the spare slot, the chip/hash/signature check before the switch, and a rollback that restores the old image if the new one has not made sound within ninety seconds. Finished when a player flashed onto the new table boots and plays without being rolled back, and an image that fails its signature is refused. Spec: player-update.md U11-U25; k7player.md R31, R34-R38; ADR 0117.",
+      "notes": [
+        {
+          "at": "2026-11-24T02:52:25Z",
+          "by": "dsh",
+          "text": "The player can take an image and come back if it is bad. partitions.csv is two 1.75 MB OTA slots with otadata after them and nvs where it was, and the firmware now verifies the rollback config. player_ota.c receives a begin (answered ready once the slot is erased - a five-second erase the K7 now waits for), writes 4 KB blocks to the spare slot only, verifies chip/descriptor/SHA-256/signature with mbedTLS before switching, and marks the new image valid only when the playout made sound; a boot with no marker (the cable) marks itself valid at once, so a fresh player is never rolled back into an empty slot. The light gains Updating, two short flashes a second, above Fault and Ready. Host: t08_ota 59 checks, t05_light 44; the player builds at 915,792 B with 50% of its slot free. What to check: the spec's U18-U22 against the board's verify order. Nothing flashed."
+        }
+      ]
+    },
+    {
+      "id": "PU-04",
+      "title": "The K7 probes and hands the image over",
+      "state": "done",
+      "group": "PU",
+      "deps": ["PU-01", "PU-02"],
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "One press of Update moves the image: the probe and the players that answer, then each stale player in turn — stop the station, 4 KB stop-and-wait blocks, restart the station — so the new image can prove itself. Finished when the act updates a stale player from the K7, drops one that stops answering without stopping the others, and leaves the station playing at the end. Spec: player-update.md U4-U10, U26-U29; ADR 0117.",
+      "notes": [
+        {
+          "at": "2026-11-24T02:54:59Z",
+          "by": "dsh",
+          "text": "Plan: the act's state machine in a portable component with host tests first, then the K7's board glue and the station pause."
+        },
+        {
+          "at": "2026-11-24T03:02:03Z",
+          "by": "dsh",
+          "text": "The K7 can find its players and hand the image over. The act is a portable state machine (components/portable/player_update_act): a probe broadcast three times, the answers deduped by MAC, up-to-date players skipped, and each stale one served in turn - station stopped, begin, waiting for the player's ready (the five-second erase), 4 KB blocks stop-and-wait with two retries, the result, station started - then the next. The K7 reads the image from its player partition at boot and hashes it (PSA), so a partition that disagrees is No image, never bytes a player refuses; the frames go through a queue drained by the emitter's worker and come back through its callback, so the one task still owns the radio. app_services owns the act's task, the ESP-NOW-only guard and the station's pause/resume. Host: t48_player_update_act, 99 checks; the K7 builds at 2,129,200 B with 49% free. What to check: the act's order against player-update.md U26-U29. Nothing flashed."
+        }
+      ]
+    },
+    {
+      "id": "PU-05",
+      "title": "The Menu's Player list and its progress",
+      "state": "done",
+      "group": "PU",
+      "deps": ["PU-04"],
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "Settings → Player becomes a list: the Transport row as it is today, and Update, whose value is the truth at the moment — no image, no player, up to date, which way the version goes, and how far the act has got. Finished when the row tells the truth in every state and is inert when there is nothing to do. Spec: menu.md; player-update.md U26.",
+      "notes": [
+        {
+          "at": "2026-11-24T03:08:02Z",
+          "by": "dsh",
+          "text": "Settings → Player is a list: Transport and Update, and Update tells the truth. The Settings row now has a chevron and its transport value moved into the list; Update reads No image, Transport is HTTP, Searching..., Updating 37%, Updating 2 of 3, the outcome when an act ends, Up to date, No player, or the direction 0.6.2 -> 0.7.0 / 0.8.0 <- 0.7.0 - and only the direction is actionable. The view probes when the list opens and cancels when it closes; the arrows are ASCII because the panel's fonts do not carry U+2192. Host: t18_menu, 699 checks including every state of the row; the K7 builds at 2,132,240 B with 49% free. What to check: the row's states against player-update.md U26, and that the Settings list still reads Backlight, Rescan, Wi-Fi, About, Player. Nothing flashed."
+        }
+      ]
+    },
+    {
+      "id": "PU-06",
+      "title": "The update is proven on the pair",
+      "state": "done",
+      "group": "PU",
+      "deps": ["PU-02", "PU-03", "PU-04", "PU-05"],
+      "yolo": true,
+      "at": "2026-11-24T01:00:43Z",
+      "by": "dsh",
+      "desc": "The board evidence: an update over the air with the music returning, a power cut mid-transfer, a power cut after the switch that rolls back, an image signed with another key refused, two players in one press, and a K7 flashed with four parts keeping its network record. Finished when all of it is in the spec's board table with the numbers the boards logged. Spec: player-update.md §8.",
+      "notes": [
+        {
+          "at": "2026-11-24T03:08:37Z",
+          "by": "dsh",
+          "text": "Plan: the K7's half on the bench now (the new table, No image, then the signed image at 0x710000, and the record surviving), the pair when the player is connected."
+        },
+        {
+          "at": "2026-11-24T13:32:33Z",
+          "by": "dsh",
+          "text": "The pair is proven on the bench, with three cases not run. The K7 flashed with the new table keeps its network (player 01 42 00710000 00200000 in its boot log); the player flashed onto the two-slot table keeps the record the K7 handed it and joins without a share window. The player on 0.6.2 took the K7's 0.7.0 over the air: blocks 0..224, ota_1 holds 0.7.0, otadata seq 2 state VALID, and it boots from 0x1d0000 as App version 0.7.0, joins and plays. A 0.6.2 image signed with a key that is not the project's was transferred completely into ota_0 and the boot stayed on ota_1 - the verify refused it. Not run: both power-cut cases (a person has to cut power mid-transfer) and the two-player press (one player board); the light's patterns were not recorded by eye. The bench also found and fixed six real defects, all listed in the ticket. What to check: press Player once more and see Up to date, since both boards now run 0.7.0."
+        },
+        {
+          "at": "2026-11-24T14:17:04Z",
+          "by": "dsh",
+          "text": "The panel shift the first update caused has a fix: the K7 now copies the player image into PSRAM at boot, before the panel's first clock, so the act reads no flash at all. A mapping did not help (a cache miss is still a flash access, ADR 0055) and a retrying settle blocked the act for forty seconds. Measured: 224 blocks, the picture straight, updated 1, the player switched to 0.7.2 and marked it valid. Both boards run 0.7.2 now; Player reads up to date."
+        }
+      ]
+    },
+    {
+      "id": "HA-01",
+      "title": "The broadcast can be skipped by URL",
+      "state": "done",
+      "group": "HA",
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "`POST /api/next` and `POST /api/prev` move the broadcast one track, so a remote control finally has something to press: the skip and prev primitives already exist and are called by the MCP control tools. Finished means the two routes answer, the stream has moved, host tests cover the boundary cases, and the API contract is written into the stream server spec.",
+      "notes": [
+        {
+          "at": "2026-11-25T00:27:55Z",
+          "by": "dsh",
+          "text": "Plan: expose the existing skip/prev primitives as POST /api/next and /api/prev; host tests + spec §6; board curl owed."
+        },
+        {
+          "at": "2026-11-25T00:38:30Z",
+          "by": "dsh",
+          "text": "A remote's next and previous work: `POST /api/next` and `POST /api/prev` step the broadcast, answer 204 with no body, and refuse a near-miss path or a GET. The host suite is green — T20 in the HTTP acceptance, 102 passed, 0 failed — and the contract is in the stream server spec §6.4a.\n\nTwo things moved with them: 204 had no reason phrase and would have read \"Error\" on a success, and the route ceiling went from 36 to 40 because a full table is a station that will not start.\n\n**Not done — the board run.** The ticket's last box is one `curl -X POST /api/next` on a flashed deck, and the board is shared, so I did not take it. Say when it is free and I will flash and prove it.\n\nBranch `ha01-skip-by-url`, two commits, not pushed."
+        }
+      ]
+    },
+    {
+      "id": "HA-02",
+      "title": "The deck says which deck it is",
+      "state": "done",
+      "group": "HA",
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "`/api/status` grows a stable identity — the board's MAC as a hex id, plus its firmware version and board name — so a home-automation system can name the device and never confuse two units. Home Assistant refuses hostnames and IPs as identity, so this is what its config entry keys on. Finished means the fields are in the status document, additive so the App and existing tests are untouched, with a host test.",
+      "notes": [
+        {
+          "at": "2026-11-25T00:54:55Z",
+          "by": "dsh",
+          "text": "Plan: add app_board_id()/app_board_version() to the seam, carry id/fw/board in /api/status from the front door's composition, assert them in the front door host test, say it in front-door.md S1, and prove the id on the deck against the boot log's MAC."
+        },
+        {
+          "at": "2026-11-25T00:54:55Z",
+          "by": "dsh",
+          "text": "`/api/status` now says which deck it is, what firmware it runs and which board it is: `\"id\":\"28372f87e4d8\"`, `\"fw\":\"0.6.2\"`, `\"board\":\"8048S050C\"`.\n\n- `id` is the station MAC as twelve lowercase hex characters — the same on every boot, never repeated across units, and it survives `erase_flash`. `mark` still names the card; `id` names the deck, which is what a Home Assistant entry can key on.\n- Additive: the App ignores keys it does not know, and the MCP `player_status` is untouched.\n- **Proven on the deck**, which the earlier ticket could not: the K7 was flashed with this build, `http://k7.local/api/status` answered the id above, and the boot log printed `wifi:mode : sta (28:37:2f:87:e4:d8)` — the same MAC. The card came back after the reset (1,495 tracks) and the broadcast resumed.\n\nTo check: `curl http://k7.local/api/status` and compare `id` with the `sta (...)` line in the boot log."
+        }
+      ]
+    },
+    {
+      "id": "HA-03",
+      "title": "The deck's name is one value",
+      "state": "done",
+      "group": "HA",
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "Prefactor for the rename: the device's name is four literals today — the mDNS host, the TXT endpoint, the MCP origin guard's name list, and the name in the handover record. Put them behind one value every caller asks, still `k7`. Finished means the name has one source of truth and nothing observable about the device changed.",
+      "notes": [
+        {
+          "at": "2026-11-25T01:00:55Z",
+          "by": "dsh",
+          "text": "Plan: app_board_hostname() as the one value (board: the literal; host: K7_HOSTNAME), .local and the TXT endpoint derived from it, appliance/share/mcp ask it, and the host tier moves it to read what each consumer says."
+        },
+        {
+          "at": "2026-11-25T01:00:55Z",
+          "by": "dsh",
+          "text": "The name lives in one place now, so renaming the deck (HA-04) is one edit instead of four.\n\n- `app_board_hostname()` is the one value. It feeds the mDNS host and instance, the endpoint the TXT record advertises, the names the MCP guard accepts, and the hostname a K7Player receives in its record.\n- Nothing a person sees changed: the deck still answers and advertises `k7.local`, accepts the same origins, and hands out `k7`.\n- To check on the deck: `ping k7.local` answers; the boot log prints `mDNS: k7.local _mcp._tcp port 80, endpoint http://k7.local:80/mcp`.\n- The host tier proves the four agree by moving the name: t49 reads the seam, the `.local` form and the endpoint; t42_share decodes a record that says `kitchen`; origin_tests starts the server on the moved name and reads the guard accept `kitchen.local` and refuse `k7.local`."
+        }
+      ]
+    },
+    {
+      "id": "HA-04",
+      "title": "A person names the deck",
+      "state": "done",
+      "group": "HA",
+      "deps": ["HA-03"],
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "A name field on the setup page — the only place a person can type — is stored and becomes the deck's address: `k7-kitchen.local`, say, while `k7.local` keeps answering as an alias so the App's links and the player's current lookup do not break. Finished means `dns-sd` sees the new name, a reboot keeps it, the old name still answers, and an ADR records the rule. Renaming from the App is a follow-up, not part of this.",
+      "notes": [
+        {
+          "at": "2026-11-25T01:20:10Z",
+          "by": "dsh",
+          "text": "Plan: a device_name component with the label rule, the word in NVS beside the record and setup password, the address derived, the setup page's row and route, the mDNS alias, the guard's alias, ADR 0118 and the specs."
+        },
+        {
+          "at": "2026-11-25T01:20:10Z",
+          "by": "dsh",
+          "text": "A person can name the deck on the setup page, and the deck answers `k7-<word>.local` — while `k7.local` keeps working.\n\n- The name is one optional word: lowercase letters, digits and single hyphens, up to 24 characters. Empty is `k7`, exactly as today. A bad word is refused with the rule and changes nothing.\n- It is stored with the other settings (its own key beside the network and the setup password) and survives a reboot.\n- Everything follows the one name: mDNS advertises it, `k7.local` stays as an alias, the MCP guard accepts both and refuses another deck's name, and the handover record hands players the deck's name.\n- The rule is ADR 0118; the setup page's spec, the front door's and the handover's now say the name and the alias.\n\n**To try it:** panel → Settings → Wi-Fi → Setup (raises the setup network), join `K7.local`, open the page, type a name under *This deck's name*, then restart the deck. It answers `k7-kitchen.local`; `ping k7.local` still answers.\n\n**Proven:** the host tier — the setup integration test drives the page's row and the route (the word stored, `k7-kitchen.local` answered, emptied back to `k7.local`, four refusals that change nothing), the origin test reads the guard accepting `kitchen.local` and the alias `k7.local` and refusing `studio.local`, and the new rule test covers 16 refused words. The K7 image builds and the unnamed deck was flashed and checked (still `k7.local`, the boot log and `ping` agree).\n\n**Owed:** setting a name on the *board* — it needs that panel tap, because the setup page exists only while the setup network is up, and raising it on a provisioned deck is a person at the bench. The two-named-decks check needs a second board."
+        }
+      ]
+    },
+    {
+      "id": "HA-05",
+      "title": "The player finds the deck by the name it was handed",
+      "state": "review",
+      "group": "HA",
+      "deps": ["HA-04"],
+      "yolo": true,
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "The player looks the deck up by the name in the handover record, then `k7.local`, then the recorded address — so a renamed deck survives a changed lease instead of falling back to a stale IPv4. Finished means a renamed K7 reconnects without using the stored address, and the lookup order is host-tested.",
+      "notes": [
+        {
+          "at": "2026-11-25T01:20:14Z",
+          "by": "dsh",
+          "text": "Plan: resolve the record's name, then the product's bare name, then the record's address in the player; a scripted host resolver that records which names were asked; tests for the order, the rename-through-the-alias case and the dead address; R19 rewritten."
+        },
+        {
+          "at": "2026-11-25T01:20:14Z",
+          "by": "dsh",
+          "text": "The player looks the deck up by the name it was handed, then by `k7`, then by the recorded address — the first that resolves wins.\n\n- A deck named *after* a handover is still found: the record says `k7`, and the deck answers `k7` as an alias on its new lease.\n- A record written before names existed behaves exactly as today.\n- A moved DHCP lease stays invisible to the player while mDNS answers; the recorded address is the last resort, not the first.\n\n**Proven:** the player's host tier — the new test reads which names were asked and in what order (the name alone; the alias after a rename; `k7` as the second ask when the record's name does not answer; an old record's single ask; both names tried before a dead address), 87 checks green, player layering green, the player image builds.\n\n**Owed:** the two-board check — rename the K7, change its lease, the player comes back. It needs the K7 named first (that is HA-04's panel step) and a second unit, so it is recorded rather than run."
+        }
+      ]
+    },
+    {
+      "id": "HA-06",
+      "title": "Home Assistant's page for the deck",
+      "state": "review",
+      "group": "HA",
+      "deps": ["HA-01", "HA-02"],
+      "yolo": true,
+      "at": "2026-11-25T00:25:50Z",
+      "by": "dsh",
+      "desc": "The recipe, written down and true: a rest sensor over the status document, a rest_command for play, and a template media_player with play, next and previous — and no pause, seek or volume, because the broadcast has no transport. Plus the two README sentences and the correction to the old claim that Home Assistant cannot reach the device. Artwork is out: the cover archive has no per-cover URL. Finished means a person follows the page and gets a media_player that plays and skips.",
+      "notes": [
+        {
+          "at": "2026-11-25T01:20:19Z",
+          "by": "dsh",
+          "text": "Plan: the page with a complete configuration (rest sensor, three commands, template media_player with the deck's id), the README's section and its two sentences, the stale SSE claims corrected in the two research notes, and the HA-instance check left for the human."
+        },
+        {
+          "at": "2026-11-25T01:20:19Z",
+          "by": "dsh",
+          "text": "Home Assistant's page for the deck is written: `docs/home-assistant.md`, linked from the README.\n\n- One paste-able configuration: the status sensor, `play`/`next`/`previous` commands, and a template `media_player` whose `unique_id` is the deck's own `id` — so a rename or a new lease does not create a second entity.\n- The URLs use the deck's name (`k7-<word>.local`), with `k7.local` and the literal address given as the fallbacks a person will need when mDNS does not answer.\n- The player offers play, next and previous and nothing else. The page says why: the broadcast has no transport to pause, no seek, no volume, no power — and why there is no artwork (covers are an archive keyed by path, not a per-cover URL).\n- It says MQTT cannot give the deck a `media_player` at all: Home Assistant has no MQTT media-player platform, so the recipe needs no broker.\n- The two research notes that claimed Home Assistant cannot reach the device are corrected where the claim was written, pointing at the feasibility note; the superseded words are kept as the record in the marketing note.\n- The README gains the section, its contents entry, and the two sentences.\n\n**What to check, please** — this is the ticket's last item and the one thing I could not run here:\n1. Paste the configuration into a real Home Assistant (2026.11+) and restart: `media_player.k7` appears, with the title of what the deck is carrying.\n2. Next and Previous move the broadcast; Play switches to a chosen path.\n3. The YAML needs a firmware with `POST /api/next` and `/api/prev` — **HA-01's routes, whose branch (`ha01-skip-by-url`) is not merged into this one**, so on a deck flashed from this branch the two buttons answer `405` and the page says so.\n\nOwed: that live check, and the deck's own name on a board (HA-04's panel step)."
         }
       ]
     }

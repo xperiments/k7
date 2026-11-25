@@ -15,3 +15,7 @@ snapshot, data, 0x40,    0x410000, 2M,
 # does not erase it leaves the user's designs in place; a full erase restores the
 # factory sheet, which stays embedded in the app.
 art,      data, 0x41,    0x610000, 1M,
+# The player's signed firmware image: the fourth part the browser flash writes (ADR 0116), read
+# in place by the K7 and handed to a player over ESP-NOW. 2 MB bounds it: the 0.6.2 image is
+# 891,712 B behind a 128-byte header, and a part cannot outgrow the partition it lives in.
+player,   data, 0x42,    0x710000, 2M,

@@ -157,20 +157,23 @@ carrying a port across. `backlight-test`, `dump`, `capture`, `verify` and `headl
 development builds and are not offered on either board: a product page with a build matrix is a
 support burden in a dropdown.
 
-**F3. The flash writes the chosen board's three parts at their own offsets, and never the
-gaps:**
+**F3. The flash writes the chosen board's parts at their own offsets, and never the gaps:**
 
-| Board | Part | Offset | Size at 0.6.2 |
+| Board | Part | Offset | Size (0.6.2 unless noted) |
 |---|---|---:|---:|
 | K7 | `bootloader.bin` | `0x0` | 21,120 B |
 | K7 | `partition-table.bin` | `0x8000` | 3,072 B |
 | K7 | `sd_stream_server.bin` | `0x10000` | 2,111,536 B |
+| K7 | `k7player.img` | `0x710000` | 891,840 B (from the first signed release) |
 | K7Player | `bootloader.bin` | `0x1000` | 26,176 B |
 | K7Player | `partition-table.bin` | `0x8000` | 3,072 B |
+| K7Player | `ota_data_initial.bin` | `0x390000` | 8,192 B (from 0.7.0) |
 | K7Player | `k7player.bin` | `0x10000` | 891,712 B |
 
-The K7's table is the one it has always had. The K7Player's bootloader sits at **`0x1000`**, not
-`0x0`: that is where a classic ESP32's ROM looks, and the K7's offsets would leave the player not
+The K7's table gains one partition, the player's signed image at `0x710000` (ADR 0116,
+`player-update.md` U1–U3); everything before it keeps the offset it had. The K7 never writes that
+partition itself — the flash is the only thing that does. The K7Player's bootloader sits at
+**`0x1000`**, not `0x0`: that is where a classic ESP32's ROM looks, and the K7's offsets would leave the player not
 booting. On the K7, `nvs` sits at `0x9000` and `phy_init` at `0xF000`; the app ends at `0x2138F0`,
 far below the Snapshot at `0x410000`. A **merged** image written from `0x0` pads those gaps with
 `0xFF` and so erases the stored WiFi network — a factory reset disguised as an update. The Site
@@ -183,8 +186,9 @@ it needs, and the port is closed.
 
 **F5. The flash size is checked before a byte is written, against the board.** 16 MB for K7 — its
 partition table places `snapshot` at `0x410000` with 2 MB, and a smaller module cannot hold it —
-and 4 MB for the K7Player, whose table is the single-app default. Either way, flashing a table a
-module cannot hold produces a board that does not boot.
+and 4 MB for the K7Player, whose table is two 1.75 MB OTA slots and an 8 KB `otadata`
+(`player-update.md` U24). Either way, flashing a table a module cannot hold produces a board that
+does not boot.
 
 **F6. Nothing is written before a confirmation naming the port, the chip, the flash size, the
 board and the firmware version.** The person sees exactly what will be written and where.
@@ -240,8 +244,9 @@ reads it (`cassette_menu.c`), and `firmware.json` repeats it. The first release 
 the one tag the repository has, `v0.4.0`.
 
 **R2. Each board has a release action, and both publish through one script.**
-`./tools/build.sh sunton release` publishes the K7 and `./player/build.sh release` the K7Player;
-`npm run release` runs both, in that order, and stops at the first failure.
+`./player/build.sh release` publishes the K7Player and signs its image, and
+`./tools/build.sh sunton release` publishes the K7, which carries that image; `npm run release`
+runs the player's first and the K7's second, and stops at the first failure.
 Each
 
 1. refuses a dirty tree (`git status --porcelain`) over its own source — a binary from
@@ -255,15 +260,24 @@ Each
    each part its file, offset, size and sha256;
 5. prints the version, the sizes and the hashes, and stops. It does not commit, tag or deploy.
 
+For the K7Player the release also signs the image (ADR 0116): `tools/release_publish.py` signs
+`k7player.bin` with the release key, writes the 128-byte header of `player-update.md` U1 around it,
+and publishes `k7player.img`, the image behind its signed header; a player release with no key is
+refused. The
+K7's manifest then carries that image as its fourth part, so the K7's release cannot be cut without
+the player's bytes.
+
 **R3. Both manifests and both boards' parts are committed.** A clone that has never seen
-ESP-IDF deploys a Site whose flasher works. The cost is ~2.1 MB of history per K7 release and
-~1 MB per player release; the alternative is a deployment that 404s the one button the page
-exists for.
+ESP-IDF deploys a Site whose flasher works. The cost is ~3 MB of history per K7 release — the
+player's signed image is about 0.9 MB of it, carried at `0x710000` (ADR 0116) — and ~1.9 MB per
+player release, which publishes the image as well as the parts; the alternative is a deployment
+that 404s the one button the page exists for.
 
 **R4. CI proves each manifest against its files.** `web/scripts/check-firmware.mjs` reads both
 manifests, hashes every part under their directories, and fails on a size or hash mismatch, on a
 missing file, on a `VERSION` that disagrees with either manifest, and on a shape the page cannot
-read. It runs in the web job of CI and as `npm run check:firmware`. The manifest shape check that already
+read. It also verifies the player's signature against the public key committed in the player's
+source, so a published image that the players would refuse cannot pass the check. It runs in the web job of CI and as `npm run check:firmware`. The manifest shape check that already
 guards the PWA keeps its job (D4a, A9).
 
 **R5. The Site never publishes what it cannot verify.** The bytes the page writes are the bytes
@@ -288,8 +302,10 @@ second Vite project, not a second origin or a second Vercel project.
 its own directory (`/k7art/index.html` with the base-relative assets). The development server
 answers `/app` with the same document through a middleware, so
 `k7-dev.xperiments.dev:8000/app` has the shape it ships in (D11–D12 of
-[`k7-deploy.md`](./k7-deploy.md)); the editor's development server is its own `npm run dev` at
-`:5178`, with `base: "/"` (ADR 0112).
+[`k7-deploy.md`](./k7-deploy.md)), and it answers `/k7art` from the editor's build
+(`tools/LabelEditor/dist`, refreshed by `npm run build:editor`), so the editor's address is never
+the Site's document; an editor that is not built answers with a message naming that build. The
+editor is edited on its own `npm run dev` at `:5178`, with `base: "/"` (ADR 0112).
 
 **D3. The worker's shell list moves with the App.** `/` and `/index.html` leave it; `/app` and
 `/app.html` replace them, and the navigation handler answers only those (S5). The Site and the
@@ -321,6 +337,7 @@ flashed from a browser, and the timings below are not yet measured.
 | T10 | The Site's flash section is absent-but-honest without `'serial' in navigator`, and the manual command carries the manifest's offsets | web |
 | T11 | The reset that ends a flash moves the enable line — `DTR false, RTS true`, a wait, `DTR false, RTS false` — instead of releasing a line that is already released | web |
 | T12 | `/k7art` serves the editor and `/k7art/skill.md` the guide; every asset resolves under `/k7art/`; the editor's page boots from the built artifact | web |
+| T13 | The development server answers `/k7art` with the editor's document, `/k7art/skill.md` with the guide and a build asset with its own type; a build file it does not carry, and a path outside it, are refused rather than answered with the Site; an unbuilt editor names `npm run build:editor` | web |
 
 **Board-only, by hand**
 

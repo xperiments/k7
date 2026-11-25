@@ -55,6 +55,36 @@ void app_board_audio_tone(const float band_db[3], float gain_db)
 
 bool app_board_player_tone_capable(void) { return false; }
 
+/* The player's image and the update's radio are the board's; the host serves no player and
+ * proves neither (the act's policy is t48, the image and the radio are the K7's). */
+bool app_board_player_image(app_board_player_image_t *out)
+{
+    if (out) memset(out, 0, sizeof *out);
+    return false;
+}
+
+bool app_board_player_image_read(uint32_t offset, void *out, size_t len)
+{
+    (void)offset;
+    (void)out;
+    (void)len;
+    return false;
+}
+
+bool app_board_player_update_send(const uint8_t dst[6], const uint8_t *data, size_t len)
+{
+    (void)dst;
+    (void)data;
+    (void)len;
+    return false;
+}
+
+void app_board_player_update_frames(app_board_player_update_frame_fn fn, void *ctx)
+{
+    (void)fn;
+    (void)ctx;
+}
+
 bool app_board_player_espnow_load(bool *on)
 {
     (void)on;

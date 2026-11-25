@@ -16,6 +16,7 @@
 
 #include "player_board.h"
 #include "player_net.h"
+#include "player_ota.h"
 #include "player_playout.h"
 #include "player_stream.h"
 
@@ -45,6 +46,8 @@ static player_light_t decide(void)
     player_status_set_audio(&s_status, out.open && out.audio_now);
     /* A body that is not audio, or an output that will not open (R31). */
     player_status_set_fault(&s_status, stream.fault || out.failed);
+    /* An image is being written: the one thing the K7 is doing to this board (R38). */
+    player_status_set_updating(&s_status, player_ota_updating());
 
     return player_status_light(&s_status);
 }
@@ -67,6 +70,12 @@ player_light_t player_light_tick(uint32_t now)
     case PLAYER_LIGHT_FAULT:
         level = (now % 250) < 125 ? PLAYER_LIGHT_BRIGHT : 0;
         break;
+    case PLAYER_LIGHT_UPDATING: {
+        /* Two short flashes a second: distinct from Searching's one and Fault's four. */
+        uint32_t phase = now % 1000;
+        level = (phase < 100 || (phase >= 200 && phase < 300)) ? PLAYER_LIGHT_BRIGHT : 0;
+        break;
+    }
     default:
         level = 0;
         break;

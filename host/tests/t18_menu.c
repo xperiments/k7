@@ -558,9 +558,9 @@ static void test_settings_rows(void)
      * audio goes, and the model reports a change rather than carrying a value. */
     want_label(&r[4], "Player", "Settings row 4 label");
     want_icon(&r[4], MENU_ICON_STATION, "Settings row 4 icon");
-    want_kind(&r[4], MENU_ROW_ACTION, "Settings row 4 kind");
-    CHECK(!r[4].chevron, "Player has no chevron");
-    want_value(&r[4], "HTTP", "no stored choice shows HTTP (the facts say so)");
+    want_kind(&r[4], MENU_ROW_SUBMENU, "Settings row 4 kind: it opens a list");
+    CHECK(r[4].chevron, "Player has a chevron");
+    want_value(&r[4], "", "and no value: the transport moved into the list");
 
 
     /* Backlight cycles Auto -> 100 -> 60 -> 30 -> Auto, in place. */
@@ -608,14 +608,49 @@ static void test_settings_rows(void)
     CHECK(r[1].enabled, "Rescan is live again");
     want_label(&r[1], "Rescan", "Rescan's label when idle");
 
-    /* The Player row flips the stored choice, and the row follows it. */
+    /* The Player row is a list now (menu.md): Transport carries the choice that used to be
+     * on it, and Update carries the image. */
     menu_step(m, 3); /* Rescan -> Wi-Fi -> About -> Player */
     CHECK_EQ(menu_band(m), 4, "the band is on Player");
-    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAYER, "Player returns its action");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "Player opens a list, not an action");
+    want_str(menu_title(m), "Player", "the Player list's title");
+    CHECK_EQ(menu_count(m), 2, "two rows: Transport and Update");
+    read_rows(m, r);
+    want_label(&r[0], "Transport", "the list's first row");
+    want_kind(&r[0], MENU_ROW_ACTION, "Transport acts");
+    want_value(&r[0], "HTTP", "the transport it was left on");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAYER, "Transport returns the transport action");
+
     facts.player_espnow = true;
     menu_update(m, lib, &facts, NULL);
     read_rows(m, r);
-    want_value(&r[4], "ESP-NOW", "the row follows the setting");
+    want_value(&r[0], "ESP-NOW", "the row follows the setting");
+
+    /* No image on the K7: the Update row says so and does nothing. */
+    menu_step(m, 1);
+    CHECK_EQ(menu_band(m), 1, "the band is on Update");
+    want_label(&r[1], "Update", "the list's second row");
+    want_value(&r[1], "No image", "with no image on the K7");
+    CHECK(!r[1].enabled, "and it is inert");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "an image-less update returns nothing");
+
+    /* An image and a stale player: the direction, and the action. */
+    facts.update_loaded = true;
+    facts.update_image = "0.7.0";
+    facts.update_from = "0.6.2";
+    facts.update_direction = -1;
+    facts.update_found = 1;
+    facts.update_stale = 1;
+    facts.update_state = PUA_DONE;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "0.6.2 -> 0.7.0", "the direction it would go");
+    CHECK(r[1].enabled, "and it is actionable");
+    CHECK_EQ(menu_activate(m), MENU_ACTION_PLAYER_UPDATE, "Update returns its action");
+
+    CHECK(!menu_back(m), "back out of the Player list");
+    want_str(menu_title(m), "Settings", "back in Settings");
+    CHECK_EQ(menu_band(m), 4, "on the Player row that opened it");
 
     menu_free(m);
     library_close(lib);
@@ -653,6 +688,102 @@ static void test_settings_rows(void)
 
     remove_tree(root);
     free(root);
+}
+
+/* The Update row's other states (player-update.md U26). */
+static void test_player_states(void)
+{
+    char *root = make_tree();
+    library_t *lib = lib_from(root);
+    menu_facts_t facts = facts_plain();
+    menu_t *m = menu_open_with(lib, &facts);
+    menu_row_t r[MENU_ROWS];
+
+    facts.update_loaded = true;
+    facts.update_image = "0.7.0";
+    facts.update_found = 1;
+    facts.update_stale = 1;
+    facts.update_from = "0.6.2";
+    facts.update_direction = -1;
+    menu_update(m, lib, &facts, NULL);
+
+    menu_step(m, 2);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "into Settings");
+    menu_step(m, 4);
+    CHECK_EQ(menu_activate(m), MENU_ACTION_NONE, "into Player");
+    menu_step(m, 1);
+    read_rows(m, r);
+    want_value(&r[1], "Transport is HTTP", "HTTP is the first reason there is nothing to do");
+    CHECK(!r[1].enabled, "and the row is inert");
+
+    facts.player_espnow = true;
+    facts.update_state = PUA_PROBING;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "Searching...", "the probe is running");
+    CHECK(!r[1].enabled, "and the row waits for it");
+
+    facts.update_state = PUA_BLOCKS;
+    facts.update_percent = 37;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "Updating 37%", "the blocks are going out");
+    CHECK(!r[1].enabled, "the row does not offer itself twice");
+
+    facts.update_serving = 2;
+    facts.update_serving_total = 3;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "Updating 2 of 3", "which player of how many");
+
+    facts.update_state = PUA_DONE;
+    facts.update_served = 2;
+    facts.update_outcome = "updated 2";
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "2 updated to\n0.7.0", "and which firmware it ended on, on its own line");
+    CHECK(!r[1].enabled, "the outcome is not a button");
+
+    facts.update_served = 0;
+    facts.update_outcome = "up to date";
+    facts.update_stale = 0;
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "Up to date\n(0.7.0)", "nothing needs the image, and it names it");
+
+    facts.update_found = 0;
+    facts.update_stale = 0;
+    facts.update_outcome = "no player";
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "No player", "and nothing answered the probe");
+
+    /* The other direction: a player newer than the image. */
+    /* A failed transfer: the image that did not take, and the one still running. */
+    facts.update_found = 1;
+    facts.update_stale = 1;
+    facts.update_served = 0;
+    facts.update_failed = 1;
+    facts.update_state = PUA_DONE;
+    facts.update_outcome = "failed";
+    facts.update_from = "0.6.2";
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "0.7.0 failed,\nstill 0.6.2", "a failure names both firmwares");
+    CHECK(!r[1].enabled, "and is not a button");
+    facts.update_failed = 0;
+
+    facts.update_found = 1;
+    facts.update_stale = 1;
+    facts.update_from = "0.8.0";
+    facts.update_direction = 1;
+    facts.update_state = PUA_DONE;
+    facts.update_outcome = "found";
+    menu_update(m, lib, &facts, NULL);
+    read_rows(m, r);
+    want_value(&r[1], "0.8.0 <- 0.7.0", "a step back says so");
+
+    menu_free(m);
 }
 
 static void test_playlists_rows(void)
@@ -1471,6 +1602,7 @@ int main(void)
     test_clean_name();
     test_root_rows();
     test_settings_rows();
+    test_player_states();
     test_wifi_list();
     test_about_rows();
     test_playlists_rows();

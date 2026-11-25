@@ -207,6 +207,35 @@ bool app_board_audio_set(bool on);
  * which is what this firmware ships and what the player expects. */
 bool app_board_player_espnow_load(bool *on);
 esp_err_t app_board_player_espnow_save(bool on);
+
+/* ---------------------------------------------------------------- the player's image
+ *
+ * The K7Player's signed firmware, as the K7 carries it (player-update.md U1-U3, ADR 0116): one
+ * data partition, a 128-byte header and the image. The board reads and checks it once; the act
+ * reads blocks out of it. `loaded` false is the row's **No image**: a partition that is absent,
+ * or a header that disagrees with the bytes behind it.
+ */
+#include "player_update.h"
+typedef struct {
+    bool         loaded;
+    pu_version_t version;
+    uint32_t     image_len;
+    uint8_t      sha256[32];
+    uint8_t      sig[PU_SIG_MAX];
+    uint8_t      sig_len;
+} app_board_player_image_t;
+
+bool app_board_player_image(app_board_player_image_t *out);
+bool app_board_player_image_read(uint32_t offset, void *out, size_t len);
+
+/* The update's sends, from the act in the application layer: the board queues them for the one
+ * task that owns the radio's sending (espnow-stream.md E11). */
+bool app_board_player_update_send(const uint8_t dst[6], const uint8_t *data, size_t len);
+
+/* The update's received frames, handed over on that same worker (never the Wi-Fi task). */
+typedef void (*app_board_player_update_frame_fn)(const uint8_t src[6], const uint8_t *data,
+                                                 size_t len, void *ctx);
+void app_board_player_update_frames(app_board_player_update_frame_fn fn, void *ctx);
 void app_board_audio_frame(void *ctx, const uint8_t *frame, size_t bytes);
 
 /* The K7's tone, for the player (espnow-stream.md E12/E13). `band_db` is LOW, MID, HIGH in

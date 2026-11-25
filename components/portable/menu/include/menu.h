@@ -28,6 +28,7 @@
 #include "library.h"
 #include "mini_icecast.h"
 #include "playlist_file.h"
+#include "player_update_act.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,6 +88,7 @@ typedef enum {
     MENU_ACTION_RESCAN,
     MENU_ACTION_BACKLIGHT, /* menu_action_backlight() is the new percent (0 = Auto) */
     MENU_ACTION_PLAYER,    /* flips how the player's audio is sent (espnow-stream.md E9) */
+    MENU_ACTION_PLAYER_UPDATE, /* starts the player's update (player-update.md U26) */
     MENU_ACTION_SHUFFLE,   /* toggle the mode (ADR 0023) */
     MENU_ACTION_CLOSE,     /* the view should close the Menu */
     MENU_ACTION_WIFI_TOGGLE, /* start the setup network, or stop it */
@@ -127,6 +129,22 @@ typedef struct {
     const playlist_file_t *playlists;
     int                    playlist_count;
     uint64_t               playlist_selected;
+    /* The player's update (ADR 0117, player-update.md U26): the image the K7 carries and the
+     * act's status, copied by the view from app_services_player_update_status() on every poll.
+     * Every string here must outlive the open Menu. */
+    bool        update_loaded;
+    const char *update_image;    /* its version, "0.7.0" */
+    pua_state_t update_state;
+    int         update_found;    /* players that answered the probe */
+    int         update_stale;    /* of them, needing the image */
+    int         update_serving;  /* 1-based stale player being served */
+    int         update_serving_total;
+    int         update_percent;  /* the serving player's blocks */
+    const char *update_from;     /* the first stale player's version */
+    int         update_direction;/* its version against the image's: -1 older, 1 newer */
+    int         update_served;   /* players this act has updated */
+    int         update_failed;   /* players this act could not update */
+    const char *update_outcome;
 } menu_facts_t;
 
 typedef struct menu menu_t;

@@ -79,18 +79,22 @@ MENU
 │  ├─ Backlight  brightness      AUTO / 100% / 60% / 30%
 │  ├─ Rescan     endless-loop    RESCAN / RESCANNING... (inert while running)
 │  ├─ Wi-Fi      radio-waves     chevron
-│  └─ About      k7logo          chevron
-│     ├─ Firmware   micro-chip       the app's version
-│     ├─ Board      tablet-android   the board's short name
-│     ├─ Partition  disc             the app partition's size
-│     ├─ Format     radio-waves      the broadcast's container
-│     ├─ Rate       radio-waves      its sample rate
-│     ├─ Bitrate    radio-waves      its bit rate
-│     ├─ State      books            the Library's state
-│     ├─ Tracks     books            how many
-│     ├─ Directories books           how many
-│     ├─ Size       books            the total
-│     └─ Truncated  books            whether the scan dropped rows
+│  ├─ About      k7logo          chevron
+│  │  ├─ Firmware   micro-chip       the app's version
+│  │  ├─ Board      tablet-android   the board's short name
+│  │  ├─ Partition  disc             the app partition's size
+│  │  ├─ Format     radio-waves      the broadcast's container
+│  │  ├─ Rate       radio-waves      its sample rate
+│  │  ├─ Bitrate    radio-waves      its bit rate
+│  │  ├─ State      books            the Library's state
+│  │  ├─ Tracks     books            how many
+│  │  ├─ Directories books           how many
+│  │  ├─ Size       books            the total
+│  │  └─ Truncated  books            whether the scan dropped rows
+│  └─ Player     radio-waves     chevron
+│     ├─ Transport  radio-waves    ESP-NOW / HTTP
+│     └─ Update     micro-chip     NO IMAGE / NO PLAYER / UP TO DATE / 0.6.2 -> 0.7.0 / UPDATING 37% / UPDATED TO 0.7.0
+
 └─ Shuffle       toggle-off/on   OFF / ON  toggles Shuffle mode (ADR 0023)
 ```
 
@@ -99,7 +103,8 @@ MENU
 | Root | 4 | fixed | `Menu` |
 | Browse | the directory's children in the library's name order, directories and Tracks mixed | `library_child_count()` / `library_child()` / `library_kind()` | `Browse`, then `Browse /Jazz`, ... |
 | Playlists | `Library order`, then the card's lists, or one note | `playlist_list()` read by the view; `playlist_select_current()` | `Playlists` |
-| Settings | 4 | fixed | `Settings` |
+| Settings | 5 | fixed | `Settings` |
+| Player | 2 | fixed: the transport, then the update | `Player` |
 | Wi-Fi | Setup, Share, Network, Password, Reset password, Address | fixed, `setup_status()` and the share window's deadline | `Wi-Fi` |
 | About | 11 | `esp_app_get_description()`, the board adapter, the partition table, `mini_icecast_status_t`, `library_*` | `About` |
 
@@ -128,12 +133,23 @@ MENU
   is read when the Menu opens and again on a new generation; the model reads that index from its
   facts and never touches the card.
 - **Settings** changes things only: Backlight, Rescan, Wi-Fi, About and Player. The Station and
-  Library destinations are gone; their facts live in About. **Player** is how the player's audio
-  is sent — `ESP-NOW` or `HTTP` — and it is the same choice the micro switch on the player will
-  make (ADR 0104, `espnow-stream.md` E9): one transport at a time, remembered across a power cut.
-  Choosing applies at once: the station stops and starts at that transport's format — 128 kbps
-  for `ESP-NOW`, 256 for `HTTP` — so About's Bitrate follows the row without a reboot
+  Library destinations are gone; their facts live in About. **Player** is a list of two rows.
+  `Transport` is how the player's audio is sent — `ESP-NOW` or `HTTP` — and it is the same choice
+  the micro switch on the player will make (ADR 0104, `espnow-stream.md` E9): one transport at a
+  time, remembered across a power cut. Choosing applies at once: the station stops and starts at
+  that transport's format — 128 kbps for `ESP-NOW`, 256 for `HTTP` — so About's Bitrate follows
+  the row without a reboot
   ([ADR 0106](../adr/0106-the-station-stops-and-starts-so-the-format-can-follow-the-transport.md)).
+  `Update` hands the player the image the K7 carries (ADR 0116, ADR 0117, `player-update.md` U26):
+  its value is the state — `No image` with no partition, `Transport is HTTP` when the player
+  cannot hear the K7, `No player` when nothing answers the probe, `Up to date ⏎ (0.7.3)`, the
+  direction `0.6.2 -> 0.7.0` (or `<-` for a step back), `Updating 37 %` and `Updating 2 of 3`
+  while it runs, and the outcome when it ends naming the firmware on its own line, because the
+  value column is too narrow for the verb and the version together: `Updated to ⏎ 0.7.3`,
+  `2 updated to ⏎ 0.7.3`, `0.7.3 failed, ⏎ still 0.7.2`. Opening the list probes with the ESP-NOW transport chosen;
+  activating the row while it is actionable stops the station, transfers, and restarts it per
+  player. The row is inert in every state that is not the direction, and the
+  player lights its own **Updating** meanwhile (ADR 0117).
 - **About** is the player's diagnostics page, eleven value Rows in three icon groups: Firmware,
   Board, Partition (the player); Format, Rate, Bitrate (the broadcast); State, Tracks,
   Directories, Size, Truncated (the library). Its values: the app's version, the board's short

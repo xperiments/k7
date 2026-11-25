@@ -2,8 +2,9 @@
 
 The second device: an ESP32 classic that joins a network, plays the K7's live stream and turns it
 into sound at a Bluetooth speaker or a line output. It owns no card, no library and no Snapshot,
-and it is not a K7 — the only thing it ever asks a K7 for is the stream, and the only thing a K7
-ever gives it is a network to ask on.
+and it is not a K7 — the only thing it ever asks a K7 for is the stream, and the K7 gives it a
+network to ask on and, when its own firmware is older than the image a K7 carries, that image
+([ADR 0116](../docs/adr/0116-a-players-firmware-is-a-signed-image-the-k7-carries.md)).
 
 ## Language
 
@@ -27,9 +28,16 @@ _Avoid_: Bluetooth mode, BT sink, wireless output
 
 **Status light**:
 The K7Player's only surface: one LED whose state is one of **Searching** (no network it can use),
-**Ready** (on a network, no stream yet), **Playing**, or **Fault** (it cannot do what it was told,
-and the reason is not the absence of a network).
+**Ready** (on a network, no stream yet), **Playing**, **Updating** (writing the image a K7 is
+handing it, from the packet it accepts until it reboots), or **Fault** (it cannot do what it was
+told, and the reason is not the absence of a network).
 _Avoid_: LED, indicator, lamp
+
+**Player image**:
+*(The K7's word, defined in the [stream server's glossary](../docs/specs/CONTEXT.md#the-players).)*
+The signed firmware a K7 hands over: the player writes it to its spare slot, verifies it, and boots
+it only if its board, its hash and its signature agree (ADR 0116).
+_Avoid_: firmware update, OTA image, flash
 
 ### The network
 

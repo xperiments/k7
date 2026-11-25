@@ -1,2 +1,2 @@
 idf_component_register(INCLUDE_DIRS "include"
-                       REQUIRES wifi_record)
+                       REQUIRES wifi_record player_update)

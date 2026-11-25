@@ -11,3 +11,10 @@ CONFIG_BT_ENABLED=n
 # The board has 4 MB. The app partition is sized in partitions.csv when there is something
 # to flash beyond this skeleton.
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Two OTA slots and the rollback (ADR 0117): the player's firmware arrives over ESP-NOW, so it
+# needs a spare slot to write while it runs, and a bootloader that puts the old image back when
+# a new one does not prove itself within ninety seconds.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

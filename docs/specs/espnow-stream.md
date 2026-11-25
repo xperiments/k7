@@ -7,7 +7,8 @@ transport.
 
 Both boards are ESP-IDF 6.1 and both already speak ESP-NOW for the handover
 ([`network-handover.md`](./network-handover.md)), so the version byte and the type byte are shared:
-`0x01` beacon, `0x02` request, `0x03` record, `0x04` audio, `0x05` status and `0x06` tone.
+`0x01` beacon, `0x02` request, `0x03` record, `0x04` audio, `0x05` status and `0x06` tone. The
+player's update adds `0x07`–`0x0C` and is defined in [`player-update.md`](./player-update.md).
 
 ## 1. The frame the K7 sends
 
@@ -107,13 +108,15 @@ listener.
 **E10. The radio stays up.** A stream cannot be a window: ESP-NOW is initialised once, at boot,
 and stays up while the player's audio uses it, so the share window stops owning the radio and only
 adds its beacon to it (`network-handover.md` H13). When the station emits over HTTP instead, the
-radio keeps the window's old lifecycle and costs nothing outside it.
+radio keeps the window's old lifecycle and costs nothing outside it, and the Player list offers no
+update there, because the player could not hear the K7 to prove one (player-update.md U8).
 
 **E11. Nothing that can block runs in the radio's receive callback.** The callback copies the
 packet — the player's status, or a share-window frame — into a queue and returns to the Wi-Fi
 driver. One task of the board owns the emitter: it applies the credit, answers the NACKs, sends,
-and runs the recovery (a re-association, and a restart as the last resort). The station's publish
-path never takes the emitter's lock either: the broadcast copies the frame into that queue and goes
+and runs the recovery (a re-association, and a restart as the last resort). The player's update is
+a mode of that one task, never a second sender beside it (player-update.md U29). The station's
+publish path never takes the emitter's lock either: the broadcast copies the frame into that queue and goes
 back to encoding, and a full queue drops it, which the player's next gap names again. A send that
 blocks costs the player frames; it must never cost the station, and it must never hold a lock
 another task waits on (EN-10: a send from the callback froze the K7 for hours, with the radio and

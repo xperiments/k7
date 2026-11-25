@@ -90,6 +90,7 @@ static uint32_t s_drawn;             /* the model version on screen */
 static mini_icecast_status_t s_status;
 static menu_row_t s_rows[MENU_ROWS];
 static menu_facts_t s_facts;
+static bool s_in_player_list;
 
 /* The card's Playlist index while the Menu is open. The model reads it from the facts
  * and never touches the card; this array belongs to the view and outlives the open Menu.
@@ -252,6 +253,26 @@ static menu_facts_t build_facts(void)
     f.playlists = s_playlists;
     f.playlist_count = s_playlist_count;
     f.playlist_selected = playlist_select_current();
+
+    /* The player's update (ADR 0117): the act's status, copied under its own lock. */
+    static app_services_player_update_t up;
+    static char up_image[18], up_from[18];
+    app_services_player_update_status(&up);
+    snprintf(up_image, sizeof up_image, "%s", up.image);
+    snprintf(up_from, sizeof up_from, "%s", up.from);
+    f.update_loaded = up.loaded;
+    f.update_image = up_image;
+    f.update_state = (pua_state_t)up.state;
+    f.update_found = up.found;
+    f.update_stale = up.stale;
+    f.update_serving = up.serving;
+    f.update_serving_total = up.serving_total;
+    f.update_percent = up.percent;
+    f.update_from = up_from;
+    f.update_direction = up.direction;
+    f.update_served = up.served;
+    f.update_failed = up.failed;
+    f.update_outcome = up.outcome;
     return f;
 }
 
@@ -336,6 +357,13 @@ static void refresh(void)
     }
     if (new_lease) read_playlists();
 
+    /* Opening the Player list is what probes for the players, and leaving it abandons what the
+     * act was doing (player-update.md U7, U17). The title is the model's own word for it. */
+    bool player_list = strcmp(menu_title(s_model), "Player") == 0;
+    if (player_list && !s_in_player_list) app_services_player_update_probe();
+    else if (!player_list && s_in_player_list) app_services_player_update_cancel();
+    s_in_player_list = player_list;
+
     s_facts = build_facts();
     menu_update(s_model, s_lib, &s_facts, &s_status);
     if (menu_version(s_model) != s_drawn) draw_rows();
@@ -384,6 +412,10 @@ static void activate(void)
             break;
         case MENU_ACTION_BACKLIGHT:
             backlight_set_hold(menu_action_backlight(s_model));
+            break;
+        case MENU_ACTION_PLAYER_UPDATE:
+            /* A person pressed it: the act serves every stale player that answered (U26). */
+            app_services_player_update_start();
             break;
         case MENU_ACTION_PLAYER:
             /* One row, two transports, never both (espnow-stream.md E9, ADR 0105). The
@@ -554,6 +586,8 @@ void cassette_menu_open(bool white)
     s_open = true;
     s_white = white;
     s_drawn = 0;
+    /* A fresh open probes again if it lands on the Player list (the model remembers it). */
+    s_in_player_list = false;
     mini_icecast_status(&s_status);
     s_lib = library_acquire();
     read_playlists();
@@ -579,6 +613,8 @@ void cassette_menu_open(bool white)
 void cassette_menu_close(void)
 {
     if (!s_open) return;
+    if (s_in_player_list) app_services_player_update_cancel();
+    s_in_player_list = false;
     s_open = false;
 
     lv_obj_set_hidden(s_page, true);

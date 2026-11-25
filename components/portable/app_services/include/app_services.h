@@ -125,11 +125,45 @@ uint32_t app_services_station_bitrate(bool player_espnow);
 void app_services_tone_band_set(int band, float db);
 void app_services_tone_gain_set(float db);
 
+/* ---------------------------------------------------------------- the player's update
+ *
+ * player-update.md U4-U10, U26-U29, ADR 0117. The Player list probes on open; a press serves
+ * every stale player in turn, with the station stopped and started around each. The policy is
+ * player_update_act's, the frames and the image are the board's, and the row reads this status.
+ * Only with the ESP-NOW transport: with HTTP the player hears no K7 to prove an image against
+ * (U8). */
+typedef struct {
+    bool loaded;         /* the K7 carries an image */
+    char image[18];      /* its version, "0.7.0" */
+    int  state;          /* pua_state_t */
+    int  found;          /* players that answered the probe */
+    int  stale;          /* of them, needing the image */
+    int  serving;        /* 1-based stale player being served, 0 when not serving */
+    int  serving_total;  /* stale players this act serves */
+    int  percent;        /* the serving player's blocks */
+    int  served;         /* players this act has updated */
+    int  failed;         /* players this act could not update */
+    char from[18];       /* the first stale player's version */
+    int  direction;      /* its version against the image's: -1 older, 1 newer, 0 unknown */
+    char outcome[64];
+} app_services_player_update_t;
+
+void app_services_player_update_init(void);
+void app_services_player_update_probe(void);
+void app_services_player_update_start(void);
+void app_services_player_update_cancel(void);
+void app_services_player_update_status(app_services_player_update_t *out);
+
 /* Stop the station and start it again at `kbps`, leaving the network, the card, the HTTP
  * server and the panel alone (ADR 0106). A listener is disconnected, which is what a station
  * restart means, and the Track that was playing is asked for again on the new station. The
  * boot has no need for this: it starts once, at the format the transport implies. */
 esp_err_t app_services_station_restart(uint32_t kbps);
+
+/* Stop the station and start it again later, for the update's ten seconds of silence
+ * (player-update.md U27). The Track that was playing continues when it comes back. */
+esp_err_t app_services_station_pause(void);
+esp_err_t app_services_station_resume(void);
 
 /* Tell the composition whether the retry task has a mounted card. The rescan
  * uses the no-card generation when there is none, so the state stays

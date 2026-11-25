@@ -695,6 +695,22 @@ encrypted **Network record**. It leaves nothing behind — the K7 remembers no p
 player, and cannot tell one from another afterwards (ADR 0098).
 _Avoid_: pairing, linking, registration
 
+### The players
+
+**Player image**:
+The K7Player's signed firmware as a K7 holds it: the release's `k7player.bin` behind a 128-byte
+header carrying its version, its SHA-256 and its signature. A K7 carries it in its own flash and
+hands it to any player that answers its probe; the player verifies it before it switches to it
+(ADR 0116).
+_Avoid_: firmware (that is the K7's own version row), update (the App's Update file is `k7.db`),
+OTA
+
+**Player update**:
+The act a person opens from `Settings → Player → Update`: the K7 stops the station, probes for the
+players in range, and hands the **Player image** to each player whose version differs, one at a
+time (ADR 0117).
+_Avoid_: flash update (the Site's flash writes a board over USB), push, sync
+
 ### Clients and access
 
 **Client**:

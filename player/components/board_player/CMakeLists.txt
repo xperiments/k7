@@ -8,5 +8,7 @@
 idf_component_register(SRCS "board_player_esp32.c" "output_i2s.c" "light_led.c"
                        INCLUDE_DIRS "."
                        REQUIRES player nvs_flash esp_wifi esp_netif esp_event mdns mbedtls lwip
+                                app_update esp_partition esp_app_format
                                 esp_driver_i2s esp_driver_ledc
+                       EMBED_TXTFILES "../../release-key.pub.pem"
                        WHOLE_ARCHIVE)

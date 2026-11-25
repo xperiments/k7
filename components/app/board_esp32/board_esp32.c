@@ -26,6 +26,7 @@
 #include "esp_now.h"
 #include "esp_timer.h"
 #include "espnow_stream.h"
+#include "player_update.h"
 #include "freertos/semphr.h"
 #include "esp_random.h"
 #include "esp_partition.h"
@@ -1273,11 +1274,24 @@ typedef struct {
 } audio_frame_item_t;
 
 typedef struct {
-    uint8_t kind; /* 0 = the player's status, 1 = a share-window frame */
+    uint8_t kind; /* 0 = the player's status, 1 = a share-window frame, 2 = an update frame */
     uint8_t src[ESP_NOW_ETH_ALEN];
     uint16_t len;
     uint8_t data[ESP_NOW_MAX_DATA_LEN];
 } audio_ctrl_item_t;
+
+/* The update's sends: queued by the act, sent by the worker, so the one task that owns the
+ * radio's sending keeps owning it (espnow-stream.md E11, player-update.md U29). */
+typedef struct {
+    uint8_t dst[ESP_NOW_ETH_ALEN];
+    uint16_t len;
+    uint8_t data[ESP_NOW_MAX_DATA_LEN];
+} audio_send_item_t;
+
+#define UPDATE_SEND_QUEUE 20
+static QueueHandle_t s_update_sends;
+static app_board_player_update_frame_fn s_update_cb;
+static void *s_update_ctx;
 
 static QueueHandle_t s_audio_frames;
 static QueueHandle_t s_audio_ctrl;
@@ -1303,6 +1317,7 @@ static int64_t s_tone_sent_us;
 static volatile bool s_tone_capable;
 
 static void audio_apply_status(const uint8_t src[6], const uint8_t *data, size_t len);
+static void audio_send_update(const uint8_t dst[6], const uint8_t *data, size_t len);
 
 static bool audio_send(const uint8_t *pkt, size_t len, void *ctx)
 {
@@ -1510,8 +1525,16 @@ static void audio_worker_task(void *arg)
             }
             while (s_audio_ctrl && xQueueReceive(s_audio_ctrl, &ctrl, 0) == pdTRUE) {
                 if (ctrl.kind == 0) audio_apply_status(ctrl.src, ctrl.data, ctrl.len);
-                else audio_dispatch_share(ctrl.src, ctrl.data, ctrl.len);
+                else if (ctrl.kind == 1) audio_dispatch_share(ctrl.src, ctrl.data, ctrl.len);
+                else if (s_update_cb) s_update_cb(ctrl.src, ctrl.data, ctrl.len, s_update_ctx);
                 worked = true;
+            }
+            if (s_update_sends) {
+                audio_send_item_t out;
+                while (xQueueReceive(s_update_sends, &out, 0) == pdTRUE) {
+                    audio_send_update(out.dst, out.data, out.len);
+                    worked = true;
+                }
             }
             audio_send_tone();
             if (!worked) break;
@@ -1542,6 +1565,8 @@ static bool audio_worker_start(void)
                                           s_audio_ctrl_store, &s_audio_ctrl_struct);
         if (!s_audio_ctrl) return false;
     }
+    if (!s_update_sends) s_update_sends = xQueueCreate(UPDATE_SEND_QUEUE, sizeof(audio_send_item_t));
+    if (!s_update_sends) return false;
     if (xTaskCreatePinnedToCore(audio_worker_task, "espnow", 6144, NULL, 5, &s_audio_worker, 0) !=
         pdPASS) {
         s_audio_worker = NULL;
@@ -1594,6 +1619,18 @@ static void espnow_recv_cb(const esp_now_recv_info_t *info, const uint8_t *data,
     if (!info || !data || len < 2) return;
     if (data[0] == ES_VERSION && data[1] == ES_TYPE_STATUS) {
         audio_post_status(info->src_addr, data, (size_t)len);
+        return;
+    }
+    /* The update's six frames (player-update.md U4-U16): their type range is above the
+     * stream's and they carry the same version byte, so one dispatch serves the radio. */
+    if (data[0] == PU_VERSION && data[1] >= PU_TYPE_PROBE && data[1] <= PU_TYPE_RESULT) {
+        if (!s_update_cb || len <= 0) return;
+        if (!s_audio_ctrl) return;
+        audio_ctrl_item_t it = {.kind = 2, .len = (uint16_t)len};
+        memcpy(it.src, info->src_addr, sizeof it.src);
+        memcpy(it.data, data, (size_t)len);
+        if (xQueueSend(s_audio_ctrl, &it, 0) == pdTRUE) xSemaphoreGive(s_audio_signal);
+        else s_audio_lost++;
         return;
     }
     if (!s_share_cb || len <= 0) return;
@@ -1871,4 +1908,163 @@ bool app_board_x25519(const uint8_t priv[32], const uint8_t peer_pub[32], uint8_
     uint8_t any = 0;
     for (int i = 0; i < 32; i++) any |= shared[i];
     return any != 0;
+}
+
+
+/* ---------------------------------------------------------------- the player's image
+ *
+ * player-update.md U1-U3, ADR 0116. Read once, and only if it checks out: the header's own
+ * fields, then the SHA-256 of the bytes behind it. A partition that is absent or disagrees is
+ * **No image** - the row says so rather than handing a player bytes it would refuse.
+ */
+
+#define PLAYER_IMAGE_PART 0x42
+
+static const esp_partition_t *s_player_image_part;
+static app_board_player_image_t s_player_image;
+static bool s_player_image_checked;
+
+/* The image is copied into PSRAM once, at boot, before the panel's first clock: a flash access
+ * takes the PSRAM window away and displaces the RGB panel's scan until the engine is restarted
+ * (ADR 0055, screen_display.c's own note), and a transfer is 224 flash reads in ten seconds — no
+ * settle can keep up with that, and measured on the bench the picture sat a band to one side for
+ * the whole act. In PSRAM the blocks are memcpy and the panel never sees the flash. */
+static uint8_t *s_player_image_copy;
+
+static const esp_partition_t *player_image_part(void)
+{
+    if (!s_player_image_part)
+        s_player_image_part =
+            esp_partition_find_first(ESP_PARTITION_TYPE_DATA, PLAYER_IMAGE_PART, NULL);
+    return s_player_image_part;
+}
+
+bool app_board_player_image(app_board_player_image_t *out)
+{
+    if (!out) return false;
+    if (s_player_image_checked) {
+        *out = s_player_image;
+        return s_player_image.loaded;
+    }
+    s_player_image_checked = true;
+
+    const esp_partition_t *part = player_image_part();
+    uint8_t header[PU_HEADER_SIZE];
+    pu_header_t h;
+    if (!part || esp_partition_read(part, 0, header, sizeof header) != ESP_OK ||
+        !pu_header_parse(header, sizeof header, &h)) {
+        ESP_LOGW(TAG, "player image: no image the players would take");
+        *out = s_player_image;
+        return false;
+    }
+
+    bool ok = psa_crypto_init() == PSA_SUCCESS;
+    psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+    if (ok) ok = psa_hash_setup(&op, PSA_ALG_SHA_256) == PSA_SUCCESS;
+    /* One read of the whole image into PSRAM, then the hash from there: the boot's flash work
+     * is behind the panel's first clock by design (screen_display.c), so this is the one moment
+     * a flash read costs nothing on the glass. */
+    uint8_t *copy = heap_caps_malloc(h.image_len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!copy) copy = heap_caps_malloc(h.image_len, MALLOC_CAP_8BIT);
+    if (copy) {
+        if (esp_partition_read(part, PU_HEADER_SIZE, copy, h.image_len) != ESP_OK) {
+            heap_caps_free(copy);
+            copy = NULL;
+        } else if (psa_hash_update(&op, copy, h.image_len) != PSA_SUCCESS) {
+            heap_caps_free(copy);
+            copy = NULL;
+        }
+    } else {
+        ESP_LOGW(TAG, "player image: no memory to hold it; the blocks will be flash reads");
+        ok = false;
+    }
+    uint8_t digest[32];
+    size_t digest_len = 0;
+    if (ok) ok = psa_hash_finish(&op, digest, sizeof digest, &digest_len) == PSA_SUCCESS &&
+                 digest_len == 32;
+    if (ok) ok = memcmp(digest, h.sha256, 32) == 0;
+
+    if (ok) {
+        s_player_image_copy = copy;
+        s_player_image.loaded = true;
+        s_player_image.version = h.version;
+        s_player_image.image_len = h.image_len;
+        memcpy(s_player_image.sha256, h.sha256, 32);
+        s_player_image.sig_len = h.sig_len;
+        memcpy(s_player_image.sig, h.sig, h.sig_len);
+        ESP_LOGI(TAG, "player image: %u.%u.%u, %u B", (unsigned)h.version.major,
+                 (unsigned)h.version.minor, (unsigned)h.version.patch, (unsigned)h.image_len);
+    } else {
+        ESP_LOGW(TAG, "player image: no image the players would take");
+    }
+    *out = s_player_image;
+    return s_player_image.loaded;
+}
+
+bool app_board_player_image_read(uint32_t offset, void *out, size_t len)
+{
+    if (!s_player_image.loaded || !out || len == 0) return false;
+    if (offset + len > s_player_image.image_len) return false;
+    if (s_player_image_copy) {
+        memcpy(out, s_player_image_copy + offset, len);
+        return true;
+    }
+    const esp_partition_t *part = player_image_part();
+    if (!part) return false;
+    return esp_partition_read(part, PU_HEADER_SIZE + offset, out, len) == ESP_OK;
+}
+
+/* ---------------------------------------------------------------- the update's radio */
+
+bool app_board_player_update_send(const uint8_t dst[6], const uint8_t *data, size_t len)
+{
+    if (!dst || !data || !len || len > ESP_NOW_MAX_DATA_LEN || !s_update_sends) return false;
+    audio_send_item_t it;
+    memcpy(it.dst, dst, ESP_NOW_ETH_ALEN);
+    it.len = (uint16_t)len;
+    memcpy(it.data, data, len);
+    if (xQueueSend(s_update_sends, &it, 0) != pdTRUE) return false;
+    if (s_audio_signal) xSemaphoreGive(s_audio_signal);
+    return true;
+}
+
+void app_board_player_update_frames(app_board_player_update_frame_fn fn, void *ctx)
+{
+    s_update_cb = fn;
+    s_update_ctx = ctx;
+}
+
+static void audio_send_update(const uint8_t dst[6], const uint8_t *data, size_t len)
+{
+    if (!s_now_up || !dst || !data || !len) return;
+
+    /* A 4 KB block is seventeen frames back to back and the driver's send queue is a few
+     * frames deep: a burst overruns it with ESP_ERR_ESPNOW_NO_MEM (measured on the bench) and
+     * the fragments are lost. Pace them - two milliseconds is one frame at the pinned rate -
+     * rather than drop them, and let the block's retry cover what still fails. */
+    for (int attempt = 0; attempt < 16; attempt++) {
+        esp_err_t e = esp_now_send(dst, data, len);
+        if (e == ESP_OK) return;
+        if (e == ESP_ERR_ESPNOW_NO_MEM) {
+            vTaskDelay(pdMS_TO_TICKS(2));
+            continue;
+        }
+        if (e == ESP_ERR_ESPNOW_NOT_FOUND) {
+            /* The K7 may have forgotten this player (a reboot, a new act): register it
+             * plaintext, as the player registers the K7 (player-update.md U7a), and retry. */
+            esp_now_peer_info_t peer;
+            memset(&peer, 0, sizeof peer);
+            memcpy(peer.peer_addr, dst, ESP_NOW_ETH_ALEN);
+            peer.channel = 0;
+            peer.ifidx = WIFI_IF_STA;
+            peer.encrypt = false;
+            (void)esp_now_add_peer(&peer);
+            continue;
+        }
+        static int s_update_send_errors;
+        if (s_update_send_errors++ < 3)
+            ESP_LOGW(TAG, "update: send to %02x:%02x:%02x:%02x:%02x:%02x failed: %s", dst[0],
+                     dst[1], dst[2], dst[3], dst[4], dst[5], esp_err_to_name(e));
+        return;
+    }
 }

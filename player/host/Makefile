@@ -25,8 +25,9 @@ LDLIBS := -lpthread -lm
 
 INC := -I$(PLAYER)/components/player/include \
        -I$(ROOT)/components/portable/handover/include \
-       -I$(ROOT)/components/portable/device_name/include \
        -I$(ROOT)/components/portable/espnow_stream/include \
+       -I$(ROOT)/components/portable/player_update/include \
+       -I$(ROOT)/components/portable/device_name/include \
        -I$(ROOT)/components/portable/tone_eq/include \
        -I$(ROOT)/components/portable/dr_libs/include \
        -I$(ROOT)/host/include \
@@ -44,7 +45,9 @@ CORE_SRC := $(PLAYER)/components/player/player_recv.c \
             $(PLAYER)/components/player/player_playout.c \
             $(PLAYER)/components/player/player_tone.c \
             $(ROOT)/components/portable/tone_eq/tone_eq.c \
-            $(PLAYER)/components/player/player_light.c
+            $(PLAYER)/components/player/player_light.c \
+            $(PLAYER)/components/player/player_ota.c \
+            $(ROOT)/components/portable/player_update/player_update.c
 CORE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(CORE_SRC)))
 
 # The shared handover module, the same files the firmware and the K7 compile.
@@ -58,7 +61,7 @@ DEVICE_SRC := $(ROOT)/components/portable/device_name/device_name.c
 DEVICE_OBJ := $(patsubst %.c,$(OBJ)/%.o,$(notdir $(DEVICE_SRC)))
 
 TESTS := $(BIN)/t01_status $(BIN)/t02_net $(BIN)/t04_output \
-         $(BIN)/t05_light $(BIN)/t06_recv $(BIN)/t07_tone
+         $(BIN)/t05_light $(BIN)/t06_recv $(BIN)/t07_tone $(BIN)/t08_ota
 
 .PHONY: all test layering check clean
 
@@ -84,6 +87,10 @@ $(BIN)/t07_tone: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_h
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
 
+$(BIN)/t08_ota: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t08_ota.o
+	@mkdir -p $(BIN)
+	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
+
 $(BIN)/t05_light: $(CORE_OBJ) $(HANDOVER_OBJ) $(DEVICE_OBJ) $(OBJ)/board_player_host.o $(OBJ)/shim.o $(OBJ)/t05_light.o
 	@mkdir -p $(BIN)
 	$(CC) $(CFLAGS) $^ $(LDLIBS) -o $@
@@ -95,6 +102,7 @@ $(OBJ)/%.o: %.c
 
 vpath %.c $(PLAYER)/components/player \
             $(ROOT)/components/portable/espnow_stream $(ROOT)/components/portable/tone_eq \
+            $(ROOT)/components/portable/player_update \
             $(ROOT)/components/portable/handover $(ROOT)/components/portable/device_name \
             $(HERE) $(ROOT)/host/shim $(HERE)/tests
 -include $(wildcard $(OBJ)/*.d)
