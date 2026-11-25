@@ -335,12 +335,16 @@ export function labelEditorTools(
     {
       name: "k7art-guide",
       description:
-        "Read this once before designing: what a K7Art is for — the label's print and the J-card's sheet — how the print and the Card's window shape the label, the J-card's flap | spine | cover, the fields and the three faces, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /k7art/skill.md.",
+        "Read this once before designing: what a K7Art is for — the label's print and the J-card's sheet — how the print and the Card's window shape the label, the J-card's flap | spine | cover, the fields and the three faces, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served by this page, at the URL this result carries.",
       inputSchema: schema({}),
       execute: () => ({
         ok: true,
         guide: skillProse(opts.guide),
-        url: "/skill.md",
+        /* The page's own base, not the origin's root: the Site serves the editor under
+         * `/k7art/` (ADR 0112), so an absolute `/skill.md` named the Site's document there
+         * and the guide's reader got HTML. The editor's dev server runs at the root, where
+         * the base is `/`. */
+        url: `${import.meta.env.BASE_URL}skill.md`,
       }),
     },
 

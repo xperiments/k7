@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Editor } from "@/engine/editor";
 import { SHEET_FONTS, SLOTS } from "@/engine/vocab";
@@ -58,11 +58,24 @@ describe("the K7 label skill", () => {
     expect(guide).toBeTruthy();
     const out = guide!.execute({}) as { ok: boolean; guide: string; url: string };
     expect(out.ok).toBe(true);
-    expect(out.url).toBe("/skill.md");
+    expect(out.url).toBe(`${import.meta.env.BASE_URL}skill.md`);
     expect(out.guide.startsWith("# A K7Art for the K7")).toBe(true);
     expect(out.guide).toContain("748 × 359");
     expect(out.guide).toContain("Driving the visible controls");
     // The tool list is the caller's own; the generated block does not travel with the prose.
     expect(out.guide).not.toContain("generated: tools:start");
+  });
+
+  it("names the guide under the page's own base", () => {
+    /* The Site serves the editor at `/k7art/` (ADR 0112), so a root-absolute `/skill.md`
+     * names the Site's document there. The base is what makes the URL right in both places. */
+    vi.stubEnv("BASE_URL", "/k7art/");
+    try {
+      const guide = tools.find((t) => t.name === "k7art-guide");
+      const out = guide!.execute({}) as { url: string };
+      expect(out.url).toBe("/k7art/skill.md");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });

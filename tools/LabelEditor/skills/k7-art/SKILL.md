@@ -204,7 +204,7 @@ Read the K7Art editor: both surfaces — the label's 748x359 print, fields, role
 
 ### `k7art-guide`
 
-Read this once before designing: what a K7Art is for — the label's print and the J-card's sheet — how the print and the Card's window shape the label, the J-card's flap | spine | cover, the fields and the three faces, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served at /k7art/skill.md.
+Read this once before designing: what a K7Art is for — the label's print and the J-card's sheet — how the print and the Card's window shape the label, the J-card's flap | spine | cover, the fields and the three faces, the workflow, what gets refused, and how to do all of it from the visible controls when the tools cannot be reached. The same guide is served by this page, at the URL this result carries.
 
 Takes no arguments.
 
