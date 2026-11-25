@@ -81,7 +81,8 @@ export interface JObj {
   h?: number;
   r?: number;
   rot?: number;
-  /** The J-card field a dynamic text prints (`title`, `artist` or `meta`); empty otherwise. */
+  /** The field a dynamic text prints: a label Slot on both surfaces, or on the J-card one of
+   *  its own three (`title`, `artist`, `meta`); empty otherwise. */
   name: string;
   /** A static text's string. */
   text?: string;

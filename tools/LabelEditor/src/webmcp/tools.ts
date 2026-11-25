@@ -351,7 +351,7 @@ export function labelEditorTools(
     {
       name: "k7art-add-layer",
       description:
-        "Add a layer to the active design, on the label's 748x359 print or the J-card's 1300x1280 sheet. Coordinates are design units of that surface, origin at its top-left; a layer may sit outside and still export, where the label's print crops it. A text is static unless a field is given; on the J-card the field is title, artist or meta.",
+        "Add a layer to the active design, on the label's 748x359 print or the J-card's 1300x1280 sheet. Coordinates are design units of that surface, origin at its top-left; a layer may sit outside and still export, where the label's print crops it. A text is static unless a field is given; on the J-card the field is one of the label's Slots, or title, artist or meta.",
       inputSchema: schema(
         {
           surface: str(
@@ -895,7 +895,7 @@ export function labelEditorTools(
     {
       name: "k7art-set-field-value",
       description:
-        "Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. On the label the field is a Slot; on the J-card it is title, artist or meta. An empty string restores the default.",
+        "Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. On the label the field is a Slot; on the J-card it is a Slot, title, artist or meta. An empty string restores the default.",
       inputSchema: schema(
         {
           surface: str(

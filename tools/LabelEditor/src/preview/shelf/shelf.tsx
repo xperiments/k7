@@ -186,7 +186,7 @@ export function JcardShelf({ design, fields }: { design: JcardDesign; fields: Jc
 
   const hoverSide =
     hovered === null ? undefined : hovered < at ? "left" : hovered > at ? "right" : "active";
-  const label = fields.title.trim() || fields.artist.trim() || "The J-card";
+  const label = (fields.title ?? "").trim() || (fields.artist ?? "").trim() || "The J-card";
 
   return (
     <section

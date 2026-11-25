@@ -228,7 +228,7 @@ export function buildJCard(jcard: JCardDoc, tpl?: Tpl): { doc: JCardFile; errs: 
       } else {
         if (!JCARD_FIELDS.includes(o.name as JCardField))
           errs.push(
-            `${tag}: "${o.name || ""}" is not a J-card field (${JCARD_FIELDS.join(", ")})`,
+            `${tag}: "${o.name || ""}" is not a J-card field (a Slot, title, artist or meta)`,
           );
         // A dynamic text always carries a preview: the layer's own test value, the Fields
         // panel's value for the field, or the App's default word.
@@ -438,7 +438,7 @@ export function importJCard(raw: unknown, inks: Inks | null): JCardDoc {
         const field = prim.slot;
         if (!JCARD_FIELDS.includes(field as JCardField))
           throw new Error(
-            `jcard prim ${i + 1}: ${JSON.stringify(field)} is not a J-card field (${JCARD_FIELDS.join(", ")})`,
+            `jcard prim ${i + 1}: ${JSON.stringify(field)} is not a J-card field (a Slot, title, artist or meta)`,
           );
         o.name = field as string;
         if (prim.preview !== undefined) {

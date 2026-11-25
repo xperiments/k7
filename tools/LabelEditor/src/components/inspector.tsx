@@ -629,7 +629,7 @@ function LayerPanel({ o }: { o: Obj }) {
   );
 }
 
-// ---- the J-card: one sheet, its Type roles and its three Fields ----
+// ---- the J-card: one sheet, its Type roles and its fields ----
 
 const JCARD_FOCUS: Array<{ value: JCardFocus; label: string; detail: string }> = [
   { value: "sheet", label: "Sheet", detail: `${JCARD_W} × ${JCARD_H}` },

@@ -12,7 +12,8 @@ every Track in the library, so a label is a layout plus references to the player
 
 The same design carries a **J-card**: the paper insert of a cassette case, one side, 4.0625 × 4
 in, three panels — flap | spine | cover. The webapp draws its cover on an album with no
-picture and its spine on the shelf; it fills `title`, `artist` and `meta`, not the label's Slots.
+picture and its spine on the shelf; it fills the label's Slots as well as its own `title`,
+`artist` and `meta`, and prints nothing for a field its surface does not carry.
 
 You design both in the **K7Art Editor**, a page that offers its actions to you as tools. This
 file is the working guide; `tools/LabelEditor/README.md`, `docs/specs/k7art.md` and
@@ -170,10 +171,10 @@ cut at 96 characters. A design with no layer at all is refused.
    `k7art-set-field-value` changes that preview only, never what the player prints.
 7. **The J-card** — the same document's other side. `k7art-add-layer { surface: "jcard" }`
    takes design units of its 1300 × 1280 sheet: the flap 0–320, the spine 320–480 and the
-   cover 480–1300, with the folds as guides — art may cross them. Its texts bind to `title`,
-   `artist` and `meta` through `field` (never a label Slot), its three sizes are `jcardFonts`,
-   and its sheet colour is `jcardBackground`. Keep the cover's words inside the safe square,
-   x 480–1300 and y 230–1050: the album card is exactly that centre crop.
+   cover 480–1300, with the folds as guides — art may cross them. Its texts bind through
+   `field` to the label's Slots as well as `title`, `artist` and `meta`; its three sizes are
+   `jcardFonts`, and its sheet colour is `jcardBackground`. Keep the cover's words inside the
+   safe square, x 480–1300 and y 230–1050: the album card is exactly that centre crop.
 8. **Validate** — `k7art-validate` checks every open design, both surfaces; fix until it is
    clean.
 9. **Export** — `k7art-export-template` returns the `K7Art` object and its
@@ -210,7 +211,7 @@ Takes no arguments.
 
 ### `k7art-add-layer`
 
-Add a layer to the active design, on the label's 748x359 print or the J-card's 1300x1280 sheet. Coordinates are design units of that surface, origin at its top-left; a layer may sit outside and still export, where the label's print crops it. A text is static unless a field is given; on the J-card the field is title, artist or meta.
+Add a layer to the active design, on the label's 748x359 print or the J-card's 1300x1280 sheet. Coordinates are design units of that surface, origin at its top-left; a layer may sit outside and still export, where the label's print crops it. A text is static unless a field is given; on the J-card the field is one of the label's Slots, or title, artist or meta.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -326,7 +327,7 @@ Set the design's template id or name, its canvas background cycle (the K7 picks 
 
 ### `k7art-set-field-value`
 
-Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. On the label the field is a Slot; on the J-card it is title, artist or meta. An empty string restores the default.
+Set what a field prints in the editor and in Preview — its simulated value, shown until the resolver sends a real one. On the label the field is a Slot; on the J-card it is a Slot, title, artist or meta. An empty string restores the default.
 
 | Argument | Type | Required | Notes |
 |---|---|---|---|
@@ -499,7 +500,8 @@ documents' tabs across the top.
    (the cassette cycle), **Type roles** (the three pairs), and **Test values** (what the fields
    preview). The **Label | J-card** switch at the top changes the surface: the J-card's stage
    draws the folds and the safe square, and its Inspector has **Sheet** (background, folds,
-   focus), **Type** (the three sizes) and **Fields** (title, artist, meta) instead.
+   focus), **Type** (the three sizes) and **Template** instead; its texts take their test values
+   from the label's **Test values**.
 3. **Add layers.** The rail: **Rectangle (R)**, **Square (S)**, **Circle (O)**, **Text (T)** —
    pick one, then click the print where it goes; **Select (V)** to stop adding. Fine-tune in
    **Layout**: X, Y, Width (a text's *wrap width*), Height, Radius, Rotation °.

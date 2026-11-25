@@ -88,7 +88,10 @@ JCARD_PARTS = {
 }
 JCARD_FACES = tuple(VOCAB["defaults"]["fonts"][role]["ff"] for role in FONT_ROLES)
 JCARD_SIZE_MIN, JCARD_SIZE_MAX = 4, 640
-JCARD_FIELDS = ("title", "artist", "meta")
+# A J-card's texts bind to the label's eleven Slots as well as the J-card's own three
+# (docs/specs/k7art.md 4): the App fills the fields its surface carries and prints nothing
+# for the rest. A field outside this list is one neither the App nor the print can draw.
+JCARD_FIELDS = tuple(SLOT_NAMES) + ("title", "artist", "meta")
 JCARD_PRIM_MAX = 64
 JCARD_BYTES_MAX = 16 * 1024
 JCARD_BOUND = 4096
@@ -228,7 +231,7 @@ def jcard_errors(jcard, did):
             if "slot" in prim:
                 if prim["slot"] not in JCARD_FIELDS:
                     add(f'prim {i}: "{prim["slot"]}" is not a J-card field '
-                        f'({" / ".join(JCARD_FIELDS)})')
+                        f'(a Slot, title, artist or meta)')
                 if "preview" in prim and not isinstance(prim["preview"], str):
                     add(f"prim {i}: preview is not a string")
             elif "text" in prim:
@@ -1026,7 +1029,8 @@ def selftest():
             "prims": [
                 {"t": "text", "slot": "title", "x": 540, "y": 900, "w": 700,
                  "font": "numeral", "color": "#24211D", "align": "left", "preview": "Neon Skyline"},
-                {"t": "text", "slot": "artist", "x": 540, "y": 1060, "w": 700,
+                # A J-card text binds to the label's Slots as well as its own three (k7art.md 4).
+                {"t": "text", "slot": "song_artist", "x": 540, "y": 1060, "w": 700,
                  "font": "title", "color": "#24211D", "align": "left", "preview": "The Analog Sons"},
                 {"t": "text", "slot": "meta", "x": 540, "y": 1120, "w": 700,
                  "font": "caption", "color": "#24211D", "align": "left",

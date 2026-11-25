@@ -87,6 +87,25 @@ describe("the browser packer", () => {
     expect(jcards.designs[0].jcard).toEqual((designs()[0] as { jcard: unknown }).jcard);
   });
 
+  it("accepts a J-card text bound to a label Slot, and refuses an unknown field", () => {
+    const base = JSON.parse(JSON.stringify(designs()[0])) as Record<string, unknown>;
+    const jcard = base.jcard as { prims: Array<Record<string, unknown>> };
+    const text = jcard.prims.find((prim) => prim.t === "text" && prim.slot);
+    expect(text).toBeTruthy();
+
+    /* A J-card's texts bind to the label's eleven Slots as well as its own three
+     * (k7art.md §4): a design that prints the artist on a case is valid. */
+    text!.slot = "song_artist";
+    expect(() =>
+      buildArtPack([base as PackDesign], { packId: "neon", name: "x", author: "x" }),
+    ).not.toThrow();
+
+    text!.slot = "year";
+    expect(() =>
+      buildArtPack([base as PackDesign], { packId: "neon", name: "x", author: "x" }),
+    ).toThrow("is not a J-card field");
+  });
+
   it("refuses no designs, a bad id and a header field over its cap", () => {
     expect(() => buildLabelSheet([])).toThrow(PackError);
     expect(() => buildArtPack([], { packId: "x", name: "x", author: "x" })).toThrow(

@@ -118,8 +118,8 @@ ones the packer uses. The rest are the editor's.
   characters per slot, so the editor writes `max: 96` for every slot a text uses and offers no
   control for it; a design imported with a smaller `max` is raised to the ceiling, because the
   box is where the layout is decided. The field stays in the file because the slot record carries
-  it and the panel cuts a value there. The J-card's texts use the three **J-card fields**, not
-  Slots, and have no `max` ([`k7art.md`](./k7art.md) §4).
+  it and the panel cuts a value there. The J-card's texts bind to the same Slots or to the
+  three **J-card fields**, and carry no `max` ([`k7art.md`](./k7art.md) §4).
 
 ## 3. The sheet — `label_sheet.bin`
 
@@ -291,9 +291,10 @@ load is a host failure.
 
 ## 5. Slots: what the panel puts in them
 
-The label's eleven fields. The J-card's `title`, `artist` and `meta` are **J-card fields**
-([`k7art.md`](./k7art.md) §4), filled by the App from an album or a Track; they are not Slots
-and are not in this vocabulary.
+The label's eleven fields. A J-card's texts bind to these Slots too, and may also name its own
+three **J-card fields** - `title`, `artist` and `meta` - which the App fills from an album or a
+Track; those three are not Slots and are not in this vocabulary
+([`k7art.md`](./k7art.md) §4).
 
 Every value comes from the **Snapshot row** for the playing Track — no tags, no SD read on the
 show path, no second source. The row is found once per Track change, in RAM:

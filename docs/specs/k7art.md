@@ -219,9 +219,9 @@ The **K7Art Editor** edits one K7Art as one document with two surfaces.
   fixed black window, the Canvas backgrounds, the LVGL preview and the label's export errors.
 - **The J-card surface is the one sheet**: 1300x1280, the fold guides at 320 and 480, a focus
   for the sheet and for each of the flap, spine and cover, the sheet's background and its
-  layers' colours, the Type panel's three J-card sizes, and the Fields panel's three test
-  values. It renders in the DOM - there is no LVGL for a paper design - with the safe-square
-  guide on the cover.
+  layers' colours and the Type panel's three J-card sizes; its texts take their test values
+  from the label's Test values. It renders in the DOM - there is no LVGL for a paper design -
+  with the safe-square guide on the cover.
 - **The J-card surface's Preview is the App's shelf**, drawn by the App's own renderer: two
   cases, the turned one showing the cover part and the one beside it, spine out, the spine
   part - the drawing an album with no picture wears ([§5](#5-the-webapps-face)). It is a
@@ -230,11 +230,11 @@ The **K7Art Editor** edits one K7Art as one document with two surfaces.
 - **One document, one history, one export.** Switching surfaces does not clear the undo; the
   document autosaves both sections; Export writes the K7Art; Publish writes a pack
   ([`art-packs.md`](./art-packs.md) §3). The label's Canvas and Paper controls, and the
-  window, are the label's only; the J-card's Sheet, Type and Fields are the J-card's.
+  window, are the label's only; the J-card's Sheet, Type and Template are the J-card's.
 - **The WebMCP tools name the surface.** `k7art-read` returns both sections and the active
   surface; `k7art-add-layer`, `k7art-update-layer` and the rest take the surface, a colour
-  (`#RRGGBB`) and, for a J-card text, a J-card field; the guide is `k7art-guide` /
-  `/k7art/skill.md`. The editor is the Site's page at `/k7art`
+  (`#RRGGBB`) and, for a J-card text, a Slot or one of the J-card's fields; the guide is
+  `k7art-guide` / `/k7art/skill.md`. The editor is the Site's page at `/k7art`
   ([ADR 0112](../adr/0112-the-k7art-editor-is-the-sites-k7art-page.md)); it does not reach the
   device.
 - **A colour belongs to a layer.** There is no design-wide palette to edit: each label and
@@ -257,7 +257,7 @@ what it cannot draw. The facts are one table.
 | `jcard.space` is not 1300x1280 at 320 units per inch | the sheet is the case's |
 | a `parts` rectangle is not the flap, spine or cover | the fold lines are the case's |
 | `background` is missing or not `#RRGGBB` | what would the sheet be painted |
-| a J-card text names a field that is not `title`, `artist` or `meta` | the App carries three words |
+| a J-card text names a field that is not a Slot, `title`, `artist` or `meta` | the App carries the label's fields and its own three |
 | a J-card font face is not one of the three, or a size is outside 4..640 | the design is the pair's |
 | a J-card `fill` or text `color` is not `#RRGGBB` | there is nothing to print |
 | a J-card prim outside the sheet's +/-4096 units | the file is bounded |

@@ -509,26 +509,27 @@ One of the eleven fields a **Label template**'s text can be bound to, filled fro
 Track's **Snapshot** row: `song_title`, `song_artist`, `song_album`, `genre`, `bpm`,
 `musical_key`, `energy`, `danceability`, `valence`, `arousal`, `mood` - the editor's own ids. A
 slot carries a `max`, the most characters the design allows, and an unknown value prints nothing.
-The vocabulary is the Snapshot's, not the editor's: `year` and `album_artist` are not on it. It
-is not a **J-card field**: a J-card's three words are the App's album or Track data, not the
-Snapshot's.
+The vocabulary is the Snapshot's, not the editor's: `year` and `album_artist` are not on it. A
+J-card's texts may bind to these Slots too; its own three **J-card fields** are the App's album
+or Track data and are not on this list.
 _Avoid_: variable, token, placeholder; field (the **J-card field**)
 
 **K7Art**:
 One cassette artwork: a **Label template** and its **J-card**, one id `k7.<slug>`, one file in
 `assets/k7art/`, one-to-one. Every layer carries its own `#RRGGBB` colour - there are no colour
-roles - and the two sections share the identity and the three faces; the label's text binds to
-**Slots**, the J-card's to **J-card fields**. `label_pack.py` reads its label section and the
-App reads its J-card section; the device never parses it. It is not the retired
-`label-template v1` file.
+roles - and the two sections share the identity and the three faces; both surfaces' texts bind
+to **Slots**, and a J-card's may also name its own three **J-card fields**. `label_pack.py`
+reads its label section and the App reads its J-card section; the device never parses it. It
+is not the retired `label-template v1` file.
 _Avoid_: label template (the design, not the file), artwork, skin, theme, palette
 
 **J-card**:
 The paper insert of a cassette case: one side, 4.0625x4 in, scored into a **flap**, a **spine**
 and a **cover**; the face the App draws for an album with no cover picture. It has three
-**J-card fields** and its own three type sizes; its cover is the App's case front and album
-card, its spine the shelf's spine, and its flap has no surface yet. It is not the K7's
-**Cover** - that is the Track picture on the Card - and it is not a **Slot**.
+**J-card fields** of its own and its own three type sizes; its texts may also bind to a
+**Slot**. Its cover is the App's case front and album card, its spine the shelf's spine, and
+its flap has no surface yet. It is not the K7's **Cover** - that is the Track picture on the
+Card - and it is not a **Slot**.
 _Avoid_: sleeve, insert card, cover (the K7's **Cover**)
 
 **J-card panel**:
@@ -538,9 +539,9 @@ Editor**. The App draws the cover and the spine; the flap waits for a surface.
 _Avoid_: part, section, face
 
 **J-card field**:
-One of `title`, `artist` or `meta`: the three words a J-card's text binds to, filled by the App
-from an album's - or a Track's - name, byline and meta line. It is not a **Slot** and carries no
-`max`.
+One of `title`, `artist` or `meta`: the J-card's own three words, filled by the App from an
+album's - or a Track's - name, byline and meta line. A J-card's texts may also bind to a
+**Slot**; a J-card field is not one, and carries no `max`.
 _Avoid_: slot, variable, token, placeholder
 
 **K7Art pack**:

@@ -1,5 +1,6 @@
 import { VOCAB } from "./vocab.generated";
 import { FROLES } from "./vocab";
+import { JCARD_FIELDS } from "./jcard";
 import { crc32 } from "./crc";
 import type { K7ArtDoc } from "./tpl";
 
@@ -197,8 +198,8 @@ function jcardErrors(jcard: Record<string, unknown>, did: string): string[] {
         add(`prim ${i + 1}: font ${JSON.stringify(prim.font)} is not title, numeral or caption`);
       colourOf("color");
       if ("slot" in prim) {
-        if (!["title", "artist", "meta"].includes(String(prim.slot)))
-          add(`prim ${i + 1}: "${String(prim.slot)}" is not a J-card field (title, artist, meta)`);
+        if (!JCARD_FIELDS.includes(String(prim.slot)))
+          add(`prim ${i + 1}: "${String(prim.slot)}" is not a J-card field (a Slot, title, artist or meta)`);
         if ("preview" in prim && typeof prim.preview !== "string")
           add(`prim ${i + 1}: preview is not a string`);
       } else if ("text" in prim) {
