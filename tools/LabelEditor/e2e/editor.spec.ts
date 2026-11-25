@@ -1,5 +1,17 @@
 import { expect, test } from "@playwright/test";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/** The factory set's first design, in the id order the packer uses: the folder is the set. */
+function firstFactoryDesign(): { file: string; raw: Record<string, any> } {
+  const dir = fileURLToPath(new URL("../../../assets/k7art/", import.meta.url));
+  const file = readdirSync(dir)
+    .filter((name) => name.endsWith(".json") && !name.startsWith("."))
+    .sort()[0];
+  if (!file) throw new Error("assets/k7art has no design");
+  return { file: join(dir, file), raw: JSON.parse(readFileSync(join(dir, file), "utf8")) };
+}
 
 const sectionButton = (page: import("@playwright/test").Page, title: string) =>
   page
@@ -161,12 +173,12 @@ test("an empty static text says what it is", async ({ page }) => {
 
 test("imports a factory K7Art", async ({ page }) => {
   await page.goto("/");
-  const k7art = fileURLToPath(
-    new URL("../../../assets/k7art/k7.neon.json", import.meta.url),
-  );
-  await page.locator('input[type="file"][accept*=".json"]').setInputFiles(k7art);
-  await expect(page.getByRole("tab", { name: /neon/ })).toBeVisible();
-  await expect(page.getByRole("banner").getByText("12 layers")).toBeVisible();
+  const { file, raw } = firstFactoryDesign();
+  await page.locator('input[type="file"][accept*=".json"]').setInputFiles(file);
+  await expect(page.getByRole("tab", { name: raw.name })).toBeVisible();
+  await expect(
+    page.getByRole("banner").getByText(`${raw.label.prims.length} layers`),
+  ).toBeVisible();
 
   // The open document is the K7Art it was read from: one container, both sections.
   const exported = await page.evaluate(() => {
@@ -180,8 +192,8 @@ test("imports a factory K7Art", async ({ page }) => {
     };
   });
   expect(exported.format).toBe("k7art");
-  expect(exported.id).toBe("k7.neon");
-  expect(exported.jcard.prims).toHaveLength(3);
+  expect(exported.id).toBe(raw.id);
+  expect(exported.jcard.prims).toHaveLength(raw.jcard.prims.length);
 });
 
 test("migrates a retired label-template v1 into a K7Art", async ({ page }) => {

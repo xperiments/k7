@@ -1,15 +1,27 @@
-import neon from '../../../assets/k7art/k7.neon.json';
-
 import { readArtPack, crc32, type ArtPack } from '../../src/jcard/pack';
 
 /**
- * A `.k7artpack` built in the test: the real neon J-card, and the smallest label sheet the
+ * A `.k7artpack` built in the test: a real factory J-card, and the smallest label sheet the
  * packer's format allows (one rect per design, no slots). The App's reader checks the sheet's
  * layout, so the fixture has to write it as faithfully as the editor's packer does; it is not
  * a mock of the format.
  *
  * The options exist so a test can break one field and prove the reader names that part.
  */
+
+/** The factory J-cards as the files write them: the pack's reader wants the raw section,
+ *  `parts` and all, not the App's parsed copy of it. */
+const FACTORY = import.meta.glob('../../../assets/k7art/*.json', {
+  eager: true,
+  import: 'jcard',
+}) as Record<string, Record<string, unknown>>;
+
+function firstFactoryJcard(): Record<string, unknown> {
+  const key = Object.keys(FACTORY).sort()[0];
+  const jcard = key ? FACTORY[key] : undefined;
+  if (!jcard) throw new Error('the factory has no J-card to clone');
+  return structuredClone(jcard);
+}
 
 export interface DesignSeed {
   id: string;
@@ -18,7 +30,7 @@ export interface DesignSeed {
 }
 
 export interface PackFixtureOptions {
-  /** The J-cards' designs, in id order. Defaults to one neon clone. */
+  /** The J-cards' designs, in id order. Defaults to one factory clone. */
   designs?: DesignSeed[];
   packId?: string;
   name?: string;
@@ -51,12 +63,12 @@ export interface PackFixtureOptions {
   oversizedJcard?: boolean;
 }
 
-/** `count` neon clones, in the id order a pack writes them. */
+/** `count` clones of the first factory J-card, in the id order a pack writes them. */
 export function seedDesigns(count = 1): DesignSeed[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `k7.test-${String(index + 1).padStart(2, '0')}`,
     name: `Test design ${index + 1}`,
-    jcard: { ...neon.jcard },
+    jcard: firstFactoryJcard(),
   }));
 }
 
@@ -130,7 +142,7 @@ function buildSheet(
     view.setUint16(prim + 12, 0, true);
     view.setUint16(prim + 14, 0, true);
     view.setUint32(prim + 16, 0xffffffff, true);
-    // The prim's own colour, the neon J-card's sheet: a literal RGB888.
+    // The prim's own colour: a literal RGB888.
     view.setUint32(prim + 20, 0x142538, true);
   }
 

@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import neon from '../../assets/k7art/k7.neon.json';
 import { FACTORY_JCARDS, factoryDesigns } from '../src/jcard/factory';
 import {
   activePool,
@@ -35,11 +34,17 @@ const ASSET_IDS = Object.values(
   }) as Record<string, string>,
 ).sort();
 
+/** The factory files as they are written: a user pack's design is the raw K7Art's shape. */
+const RAW = import.meta.glob('../../assets/k7art/*.json', {
+  eager: true,
+}) as Record<string, Record<string, unknown>>;
+
 /** The first factory design, used as the shape of a second, user-pack design. */
 function secondDesign() {
-  const first = FACTORY_JCARDS[0];
+  const key = Object.keys(RAW).sort()[0];
+  const first = key ? RAW[key] : undefined;
   if (!first) throw new Error('the factory has no J-card to clone');
-  return { ...neon, id: 'k7.second', name: 'Second' };
+  return { ...first, id: 'k7.second', name: 'Second' };
 }
 
 afterEach(() => {
