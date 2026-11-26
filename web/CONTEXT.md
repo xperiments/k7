@@ -5,6 +5,10 @@ measures a card's tracks, authors the Playlists a Snapshot carries, browses the 
 player or from its own last run, and reaches the player directly over the local network. The
 device is a different context — see [`CONTEXT-MAP.md`](../CONTEXT-MAP.md).
 
+A glossary, not a chapter: find the term and read its section. `grep -n '^#' CONTEXT.md` prints
+the sections with their current lines; the whole file costs about 5.5k tokens and is re-read on
+every turn it stays in the chat.
+
 ## Language
 
 ### The site

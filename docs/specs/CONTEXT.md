@@ -4,6 +4,10 @@ An ESP32-S3 that owns a music library on a microSD card and broadcasts it over H
 context covers the **origin** side: the device that produces a stream. The consumer side is a
 separate context — see [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md).
 
+A glossary, not a chapter: find the term and read its section. `grep -n '^#' CONTEXT.md` prints
+the sections with their current lines; the whole file costs about 11k tokens and is re-read on
+every turn it stays in the chat.
+
 ## The global premise
 
 **The ESP32-S3 never serves a Track and never accepts a Track upload. All SD content

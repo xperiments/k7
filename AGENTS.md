@@ -7,9 +7,11 @@ when it goes wrong. The rest is the shape the repo already has.
 ## Start here
 
 [`CONTEXT-MAP.md`](./CONTEXT-MAP.md) is the front door: the contexts, their global premises and
-their glossaries. Read it, then the `CONTEXT.md` of the context you are touching — the
-[stream server](./docs/specs/CONTEXT.md) or the [K7 app](./web/CONTEXT.md) — then the spec that
-names the behaviour.
+their glossaries. Read it, then the sections of the `CONTEXT.md` of the context you are touching —
+the [stream server](./docs/specs/CONTEXT.md) or the [K7 app](./web/CONTEXT.md) — that name the
+terms you are about to use, then the spec that names the behaviour. Both are glossaries, not
+chapters: `grep -n '^#'` lists their sections, and the stream server's whole file is about 11k
+tokens, re-read on every later turn it stays in the chat.
 
 - **A global premise outranks the request.** Work that violates one is refused, not scheduled:
   name the premise and stop.
@@ -21,6 +23,31 @@ names the behaviour.
   an earlier one. An accepted ADR is superseded, not rewritten.
 - The [`README`](./README.md) is the manual: pins, flashing, the two-tier acceptance and the
   measured numbers. Do not restate it in a spec.
+
+### Model, plan and proof
+
+Work is planned before it is written and proved before it is called done.
+
+- **Model.** The default model is enough for everyday features, fixes, tests and docs. A
+  read-only subagent on the cheapest model does the searching and reading. The larger model is
+  for a multi-file change, a long run, or a fix the default failed twice. The largest is for a
+  migration, a refactor, or the bug nothing below it could fix — ask before paying for it, and try
+  the tier below at low effort first.
+- **Plan first.** On anything non-trivial, write the plan — what changes, in which paths, and how
+  it will be checked — and get agreement before the first edit.
+- **Finish line.** Turn the request into three to six checks that prove it: a test, a command, a
+  number. Write them down, show that they fail, then loop until they pass.
+- **Stop at three.** Three failed attempts on the same check means stop and say what is blocking,
+  not a fourth.
+- **Prove it with a run.** Name the verification before the edit and run it after. Host evidence
+  is not board evidence (see *Before you call it done*).
+- **Label every claim.** Close with what changed, how it was verified, and each claim marked
+  measured, inferred or guessed. Anything guessed is not done.
+- **One task per session.** A new task starts a new session, or a summary of what it needs; a
+  long chat that drifts carries the last task's context into the next one.
+
+Usage: [`docs/agents/agent-usage.md`](./docs/agents/agent-usage.md) has where the meter is and how
+to audit a session.
 
 ### The tree
 
