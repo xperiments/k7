@@ -12,7 +12,7 @@ outside 748x359 — all three refused by the packer, none of them by the editor.
 Make the page refuse what the sheet cannot carry, at the moment the design is made:
 
 - **The font roles are the sheet's pairs.** The role pickers offer exactly
-  [`assets/labels/fonts.json`](../../../../assets/labels/fonts.json)'s label faces —
+  [`assets/labels/vocabulary.json`](../../../../assets/labels/vocabulary.json)'s label faces —
   `Archivo Narrow 600` 24, `Barlow Condensed 700` 64, `IBM Plex Mono 500` 18 — as a face
   *and* a size, and the default caption role becomes `IBM Plex Mono 500` 18. `tplBuild` refuses
   a role that is not on the table, and `tplImport` refuses a file that names one.

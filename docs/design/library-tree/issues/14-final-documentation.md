@@ -32,7 +32,7 @@ ticket does not re-open the vocabulary.
   mDNS `xtape.local`/`_mcp._tcp`, the fixed hostname and the one-device-per-LAN limitation are
   in the README and the MCP requirements; the stale "mDNS is out of scope" line is removed.
 - The README architecture section links
-  [`docs/adr/0012-boot-built-library-arena.md`](docs/adr/0012-boot-built-library-arena.md), and
+  [`docs/adr/0012-boot-built-library-arena.md`](../../../adr/0012-boot-built-library-arena.md), and
   the architecture diagram/tree includes `library`, `library_http`, `mcp`, `mini_files` and
   the app-only pieces. No "no recursion"/flat-directory claim remains in README, spec or
   `CONTEXT.md`.

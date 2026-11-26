@@ -13,7 +13,7 @@ decoder candidates, and the memory/CPU budget.
 ## 0. Where xtape starts, and why none of it carries over
 
 `resources/` is a mini Icecast **server**: `SD → dr_mp3/dr_flac/dr_wav → resample → TCP`
-([`resources/mi_decode.c`](../resources/mi_decode.c)). Its decode layer is structurally
+([`resources/mi_decode.c`](../../components/portable/mini_icecast/mi_decode.c)). Its decode layer is structurally
 wrong for a player for three independent reasons:
 
 1. **It is file-shaped.** `mi_dec_open()` takes a path, `fopen()`s it, and supplies
@@ -384,7 +384,7 @@ connect time (Vorbis comments — station-level info, not per-track), (b) pollin
 side-channel HTTP/JSON metadata endpoint if the station exposes one (Radio Paradise does;
 most do not), or (c) reading the station's Icecast `/status-json.xsl` or admin interface
 (per *stream*, not per track, and not always reachable). This is exactly why
-[`resources/mini_icecast.c`](../resources/mini_icecast.c) exists in xtape: ICY emission is
+[`resources/mini_icecast.c`](../../components/portable/mini_icecast/mini_icecast.c) exists in xtape: ICY emission is
 an MP3/AAC feature, implemented by the *server*, and the player side of it is a documented
 ICY metadata protocol (fixed `icy-metaint` interval, length-prefixed `StreamTitle`) — the
 sibling `03-transport-verified-locally.md` covers the transport half.

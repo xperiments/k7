@@ -19,13 +19,13 @@ Read from `resources/mini_icecast.c`:
 
 - Status line is `HTTP/1.0 200 OK`, with `Content-Type: audio/wav`, `icy-name`,
   `Cache-Control: no-cache`, `Connection: close`, and **no `Content-Length`**
-  ([`mini_icecast.c:223-229`](../../../resources/mini_icecast.c)); `icy-metaint` is added
+  ([`mini_icecast.c:223-229`](../../../components/portable/mini_icecast/mini_icecast.c)); `icy-metaint` is added
   only when the request contained `icy-metadata: 1` (case-insensitive, `:221`).
 - `wav_header()` writes `RIFF` size = `data` size = `0xFFFFFFFF`
-  ([`mini_icecast.c:181-191`](../../../resources/mini_icecast.c)).
+  ([`mini_icecast.c:181-191`](../../../components/portable/mini_icecast/mini_icecast.c)).
 - `client_push()` re-derives the split every call so a metadata block lands exactly every
   `metaint` bytes **of audio**, and `since_meta` is reset per client, not per stream
-  ([`mini_icecast.c:93-109`](../../../resources/mini_icecast.c)); the first metadata block
+  ([`mini_icecast.c:93-109`](../../../components/portable/mini_icecast/mini_icecast.c)); the first metadata block
   is forced on connect by `c->title_ver = 0` (`:241`), which is correct.
 - Nothing ever emits `Accept-Ranges`, `Transfer-Encoding`, or a `206`.
 
@@ -362,7 +362,7 @@ machine's own execution.**
 3. **Structure review of the emitter itself: the framing is correct, the placement is not.**
    `send_meta()` gets the ICY wire format right — `(len + 15) / 16` blocks, one length byte,
    `16 * blocks` bytes, `L == 0` when the title has not changed
-   ([`mini_icecast.c:75-90`](../../../resources/mini_icecast.c)) — and `client_push()`
+   ([`mini_icecast.c:75-90`](../../../components/portable/mini_icecast/mini_icecast.c)) — and `client_push()`
    lands blocks on exact `metaint` boundaries. Tested against the replica, the block sits at
    body offset `16044` (`0x02` + `StreamTitle='Track One';`), which is exactly `44 + 16000`.
    Two consequences that are real for the clients that *do* opt in:

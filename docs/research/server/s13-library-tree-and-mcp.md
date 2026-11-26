@@ -82,7 +82,7 @@ Consequences:
 function `opendir()`s, `readdir()`s and `stat()`s every accepted track before rendering one
 `<li>` per track
 ([`mini_files.c:198-263`](../../../components/portable/mini_files/mini_files.c#L198-L263),
-[`music_dir.c:67-93`](../../../components/portable/mini_files/music_dir.c#L67-L93)). The response has
+`music_dir.c:67-93`). The response has
 no `Content-Length` and no ETag (`http_send_headers(..., (size_t)-1, ...)`,
 [`mini_files.c:239`](../../../components/portable/mini_files/mini_files.c#L239)).
 
@@ -93,11 +93,11 @@ broadcast can disagree if the card changes between their walks. There is no JSON
 
 `music_resolve()` rejects any name containing `/` or `\`, any name containing `..`, and any
 leading dot, then joins `dir/name` and re-checks the prefix
-([`music_dir.c:15-65`](../../../components/portable/mini_files/music_dir.c#L15-L65)). The download
+(`music_dir.c:15-65`). The download
 route decodes the rest of `/music/` into a `MUSIC_NAME_MAX + 1` (129-byte) buffer and passes it
 to that function ([`mini_files.c:267-308`](../../../components/portable/mini_files/mini_files.c#L267-L308)).
 Nested paths are therefore refused by construction, and `MUSIC_PATH_MAX` is 256
-([`music_dir.h:21-23`](../../../components/portable/mini_files/include/music_dir.h#L21-L23)).
+(`music_dir.h:21-23`).
 
 ### 1.4 The card can arrive after boot
 
@@ -1223,8 +1223,8 @@ through MCP. That is what `/api/library` is for.
 
 - Playlist and broadcast: [`components/portable/mini_icecast/mini_icecast.c`](../../../components/portable/mini_icecast/mini_icecast.c)
   (`is_audio` 665, `seek_track` 674, `broadcast_task` 684, `set_track` 371, status 950).
-- Index and download: [`components/portable/mini_files/mini_files.c`](../../../components/portable/mini_files/mini_files.c)
-  (index 198, download 267), [`music_dir.c`](../../../components/portable/mini_files/music_dir.c).
+- Index and download: `components/portable/mini_files/mini_files.c`
+  (index 198, download 267), `music_dir.c`.
 - HTTP: [`http_server.c`](../../../components/portable/http_server/http_server.c),
   [`http_parse.c`](../../../components/portable/http_server/http_parse.c),
   [`http_server.h`](../../../components/portable/http_server/include/http_server.h).

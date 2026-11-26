@@ -12,8 +12,8 @@ each cost on an ESP32-S3, and what does "many formats" do to the design?
 §4, encoder feasibility and measured encoder cost in [`s2-encoder-feasibility.md`](s2-encoder-feasibility.md),
 wire format and client behaviour in [`s3-wire-format-and-clients.md`](s3-wire-format-and-clients.md),
 the decoder-seam recommendation in [`../01-library-architecture.md`](../01-library-architecture.md) §4.
-The code under review is [`resources/mi_decode.c`](../../../resources/mi_decode.c) (`open/hz/read/close`,
-file-shaped, seek callbacks) and [`resources/mi_resample.c`](../../../resources/mi_resample.c).
+The code under review is [`resources/mi_decode.c`](../../../components/portable/mini_icecast/mi_decode.c) (`open/hz/read/close`,
+file-shaped, seek callbacks) and [`resources/mi_resample.c`](../../../components/portable/mini_icecast/mi_resample.c).
 
 **Headline:** the whole expanded set turns out to be cheap and *already packaged for ESP-IDF* — a
 family of permissively licensed `esphome/micro-*` decoders plus `78/esp-opus` covers MP3, Vorbis,
@@ -234,7 +234,7 @@ So the decoder seam for Opus is: **always `opus_decoder_create(48000, N)` and fe
 shared resampler.** Do not try to honour `input sample rate`; it exists for tools that want to write
 PCM back out at the original rate (RFC 7845 §5.1 says so explicitly). The existing
 `mi_resample.c` — which already accepts an arbitrary in/out pair and bypasses when `in_hz == out_hz`
-([`mi_resample.h`](../../../resources/mi_resample.h)) — is the right seam unchanged. If the station
+([`mi_resample.h`](../../../components/portable/mini_icecast/include/mi_resample.h)) — is the right seam unchanged. If the station
 rate is chosen as 48 kHz (the sibling notes' recommendation) then Opus needs **no resampling at all**.
 
 ### 4.2 Pre-skip — the constant-offset bug
@@ -555,7 +555,7 @@ station codec *and* rate *and* channel count, and its value scales with how homo
 is. A card of 44.1 kHz stereo MP3s served as a 44.1 kHz MP3 station: **pass-through on every track,
 ~61 % of a core saved.** A card of mixed 48 kHz Opus and 44.1 kHz MP3 served as one station format:
 pass-through on the matching subset only, and the resampler's `in_hz == out_hz` bypass
-([`mi_resample.h`](../../../resources/mi_resample.h)) is already the seam that decides it.
+([`mi_resample.h`](../../../components/portable/mini_icecast/include/mi_resample.h)) is already the seam that decides it.
 
 **Recommended shape:** make the decoder seam **`mi_dec_open()` → either a decoder or a
 pass-through `frame_source`**, with the same `read()`-shaped interface — and note that pass-through
@@ -613,7 +613,7 @@ unmeasured here).
   for Ogg, `fLaC`, `RIFF…WAVE`, `ID3`/`0xFFEx` for MP3, `0x1A45DFA3` for WebM) because extensions
   lie. The `DecoderSource` pattern in `micro-decoder` — a registered set of per-format decoders with
   a common interface — is the shape to copy, and the existing
-  [`mi_decode.h`](../../../resources/mi_decode.h) interface is already close enough that the change
+  [`mi_decode.h`](../../../components/portable/mini_icecast/include/mi_decode.h) interface is already close enough that the change
   is additive rather than a rewrite.
 
 ---

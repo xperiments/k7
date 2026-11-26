@@ -604,7 +604,7 @@ The `.onnx` variants are not all linked from the catalogue page; they resolve by
 
 ## Addendum (2026-10-20): what building it changed
 
-The app now exists in [`web/`](../web/README.md). Six findings from the build correct or
+The app now exists in [`web/`](../../web/README.md). Six findings from the build correct or
 sharpen the note above.
 
 1. **EffNet and MusiCNN share one front-end.** Essentia's `TensorflowPredictEffnetDiscogs`

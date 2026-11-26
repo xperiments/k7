@@ -1,7 +1,7 @@
 # The analyser's glue is rewritten, not eval
 
 The hosted App's policy is `script-src 'self' 'wasm-unsafe-eval' blob:`
-([`vercel.json`](../../web/vercel.json)): WebAssembly may compile, JavaScript may not be built
+([`vercel.json`](../../vercel.json)): WebAssembly may compile, JavaScript may not be built
 out of strings. That is deliberate — the App runs a model in a worker and holds the user's
 Provider key, and neither wants arbitrary code generation.
 
