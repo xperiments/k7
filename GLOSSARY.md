@@ -42,3 +42,9 @@ rendering; a real Cover always wins over a J-card.
 Written across contexts, qualify it: "a panel Install" against "the app Install", "a library
 Track" against "a Track this browser can analyze". The drawn object is the **Cassette**; the
 volume is the **Card**.
+
+## Older documents
+
+ADRs and research notes written before 2026-11-26 call the drawn cassette **the Card**, because
+that is what it was called then. They are the record and are not rewritten; read them with this
+file in hand.
