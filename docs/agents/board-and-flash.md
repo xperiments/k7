@@ -11,9 +11,9 @@ is installed per machine (`.agents/` is gitignored here).
 | `/dev/cu.usbserial-8344440` | one board; `build.sh` kills whatever holds the port before flashing, so a second `flash` silently ends the first session's `monitor` |
 | the dev server on `8000` | one origin on one port; the dev certificates assume it |
 
-Check first with `lsof -t <port>`, then lock it: `lockf -k .scratch/locks/<name>` around
-anything the tool does not guard itself. macOS has no `flock`; an atomic `mkdir` under the
-same directory does for a shell that is not going through `lockf`.
+Check first with `lsof -t <port>`, then lock it: `mkdir -p .scratch/locks && lockf -k
+.scratch/locks/<name>` around anything the tool does not guard itself. macOS has no `flock`;
+an atomic `mkdir` under the same directory does for a shell that is not going through `lockf`.
 
 Build and flash with `./tools/build.sh <variant> build flash monitor`; the variants are the
 `sdkconfig.*` files, and `package.json` names the common ones (`flash`, `flash:dev`,
