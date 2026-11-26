@@ -171,8 +171,8 @@ card it can name, the app falls back to the card this browser last worked on.
 _Avoid_: card bar, card picker, workspace switcher, tab bar
 
 **Update file**:
-The image at a Card's root that carries a **Snapshot** into the player. The App writes it, the
-player consumes it once and deletes it; nothing else writes a card's files.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). The App writes it; nothing else writes a card's files.
+
 _Avoid_: snapshot file, image file, config
 
 **Scan**:
@@ -333,11 +333,8 @@ _Avoid_: thread pool, concurrency, parallelism
 ### The library
 
 **Playlist**:
-An ordered selection of the Library's Tracks that a person authored and named, reorderable here
-and stored as one file on the card it belongs to, at `k7.playlists/<id>.k7list`. It belongs to the
-card whose Tracks it names, and that card is where it lives: the App reads it from the card when
-the card is in the computer, from the player when it is in the player, and says how far it has got.
-The player owns its playback; the App owns its authoring.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Authored, reorderable and named here; it belongs to the card whose Tracks it names.
+
 _Avoid_: setlist, crate, mixtape, queue (that one is the analyser's)
 
 **Playlist row**:
@@ -365,9 +362,8 @@ rows, so a block is an authoring idea and not a device one.
 _Avoid_: group, folder row, item
 
 **Cover**:
-The picture a Track carries, kept in this browser because the player serves paths and
-measurements and never a picture. A Track with no cover is ordinary, not an error: its face
-comes from the **Cover pool**'s J-cards, and a real Cover always wins.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Kept here because the player serves paths and measurements and never a picture; a Track without one is ordinary, and its face comes from the Cover pool's J-cards.
+
 _Avoid_: artwork, album art, thumbnail
 
 **Library source**:
@@ -395,14 +391,8 @@ _Avoid_: now playing, current song, track
 ### The covers and the packs
 
 **J-card**:
-The paper insert of a cassette case: one printed side, 4.0625 × 4 in, scored into a **flap**, a
-**spine** and a **cover**. It is the face the App draws for an album that has no cover picture:
-the cover part on the case front (the shelf and the Player), the album card (centre-cropped to
-its safe square) and the Player bar's mini case, the spine part on the shelf's left face, the
-flap nowhere yet. Its texts are the **J-card fields** — **title**, **artist** and **meta**,
-filled by the App from an album's or a Track's name, byline and meta line. It is not the
-**Cover** — that is the Track's own picture — and a real **Cover** always wins over it. The
-file, the sheet and the fields are [`k7art.md`](../docs/specs/k7art.md)'s.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Drawn here on the case front (the shelf and the Player), on the album card and on the spine.
+
 _Avoid_: sleeve, insert card, album art
 
 **Cover pool**:
@@ -413,15 +403,13 @@ label picker, though both draw from the same two packs.
 _Avoid_: cover cache, artwork store, fallback set
 
 **Factory pack**:
-The K7Arts the build ships: every file in `assets/k7art/`, its label section packed into the
-K7's embedded **Label sheet** and its J-card bundled into the App. It is always present and is
-never replaced by a **User pack**.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Here it is the App's copy: the K7's embedded Label sheet, with its J-cards bundled into the App.
+
 _Avoid_: default pack, built-in pack, bundled art
 
 **User pack**:
-One **K7Art pack** a person published and installed on the K7, stored in its **Art partition**.
-It is additive: its label sheet joins the K7's picker and its J-cards join the **Cover pool**
-behind the **Factory pack**'s. **Reset to factory** removes it.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Published and installed from the App; additive, and "Reset to factory" removes it.
+
 _Avoid_: custom pack, my pack, uploaded art
 
 **Art packs page**:

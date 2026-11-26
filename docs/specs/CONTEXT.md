@@ -89,9 +89,8 @@ The order the broadcast walks Tracks in: the library tree's depth-first, name-so
 _Avoid_: playlist (that is the authored one), queue, rotation
 
 **Playlist**:
-An ordered selection of the Library's Tracks, authored outside the device, stored as one file on
-the card — `k7.playlists/<id>.k7list` — and walked by the broadcast while selected. It is not a
-view of the library tree, and not a Track's place in it.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). It is not a view of the library tree, and not a Track's place in it.
+
 _Avoid_: broadcast order, setlist, crate, rotation
 
 **Source format**:
@@ -115,9 +114,8 @@ format and its reasoning are ADR 0047, amended by ADR 0069 and ADR 0095.
 _Avoid_: database, cache, index, library
 
 **Update file**:
-The one file at the card's root, `k7.db`, that carries a Snapshot into the device. The device
-consumes it once — flash, verify, delete — and a card without one means "nothing to update", not
-"no Snapshot".
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). The device consumes it once — flash, verify, delete — and a card without one means "nothing to update".
+
 _Avoid_: upload, seed, image
 
 **Track fingerprint**:
@@ -472,13 +470,8 @@ the label and the outer frame are the same rectangle, so there was nothing to co
 _Avoid_: plate, carcase
 
 **Cover**:
-What the white page - the **Real** Level - prints on the **Card**: the Track artwork scaled to
-the outer frame's width, top-aligned, clipped to that frame and masked by the inner one. It is
-the **label**, above the Card: cinta < Card < label. The window is a real transparent hole in
-both, so the tape shows through it. The up swipe turns it off with the Page; every way off Real
-hides it. It is part of Real, not a Level of its own and not the removed Label cover. It is not
-a J-card's **cover panel**: that is the paper insert's front, not the Track's picture on the
-Card.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). Here it is the print: the Track artwork scaled to the frame, clipped and masked on the Card — cinta < Card < label.
+
 _Avoid_: artwork screen, Case, portada
 
 **Label template**:
@@ -530,12 +523,8 @@ is not the retired `label-template v1` file.
 _Avoid_: label template (the design, not the file), artwork, skin, theme, palette
 
 **J-card**:
-The paper insert of a cassette case: one side, 4.0625x4 in, scored into a **flap**, a **spine**
-and a **cover**; the face the App draws for an album with no cover picture. It has three
-**J-card fields** of its own and its own three type sizes; its texts may also bind to a
-**Slot**. Its cover is the App's case front and album card, its spine the shelf's spine, and
-its flap has no surface yet. It is not the K7's **Cover** - that is the Track picture on the
-Card - and it is not a **Slot**.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). Its three J-card fields and three type sizes are the server's, and its texts may bind to a Slot.
+
 _Avoid_: sleeve, insert card, cover (the K7's **Cover**)
 
 **J-card panel**:
@@ -558,14 +547,13 @@ a single **K7Art**.
 _Avoid_: sheet, bundle, preset, theme
 
 **Factory pack**:
-The designs the build ships: every K7Art in `assets/k7art/`, packed into the embedded **Label
-sheet** and bundled into the App as J-cards. It is always selectable and is never replaced by a
-user's pack.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). Here it is the embedded Label sheet every design is packed into; always selectable, never replaced.
+
 _Avoid_: default pack, built-in pack
 
 **User pack**:
-The active **K7Art pack** in the K7's **Art partition**, whose label sheet and J-cards join the
-**Pool** behind the factory's. "Reset to factory" removes it.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). It is the active pack in the K7's Art partition, and "Reset to factory" removes it.
+
 _Avoid_: custom pack, my pack
 
 **Art partition**:

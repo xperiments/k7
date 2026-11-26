@@ -1,5 +1,8 @@
 # Context Map
 
+Words both contexts use are defined once in [`GLOSSARY.md`](./GLOSSARY.md); each context's
+own terms are in its `CONTEXT.md`.
+
 ## Global premises
 
 Premises that outrank every requirement in every context below. Work that violates one is

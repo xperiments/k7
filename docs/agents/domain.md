@@ -8,6 +8,8 @@ How the engineering skills consume this repo's domain documentation.
   This repo is multi-context — the stream server (`docs/specs/CONTEXT.md`) and the K7 app
   (`web/CONTEXT.md`). Read the one you are touching.
 - **`docs/README.md`**: which folder owns what, and how a document says it is still current.
+- **`GLOSSARY.md`** when the term is used by both contexts: it defines the shared ones once,
+  and disambiguates the three that mean different things on each side.
 - The spec that names the behaviour (`docs/specs/`), then **the ADRs in `docs/adr/`** that
   touch the area. There are no per-context ADR directories: every accepted decision is at the
   root, numbered sequentially.
