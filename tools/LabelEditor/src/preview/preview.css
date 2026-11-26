@@ -331,7 +331,8 @@
         white-space: nowrap;
         color: oklch(0.93 0.012 90);
         text-overflow: ellipsis;
-        
+        opacity: .6;
+        text-shadow: 0 1px black;
     }
 
     /* The group is the smaller half of the spine's read: group - album. */
