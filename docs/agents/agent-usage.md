@@ -3,7 +3,7 @@
 Every turn an agent takes re-sends the whole conversation above it, so a session costs roughly
 `tokens per turn × turns`, times the model's price. Both factors are measurable from the
 transcripts; this file says where, what the first audit found, and how to check that a change
-moved the number. The habits it measures are in [`AGENTS.md`](../../AGENTS.md#model-plan-and-proof).
+moved the number. The habits it measures are in [`AGENTS.md`](../../AGENTS.md#how-to-work).
 
 ## Where the meter is
 
