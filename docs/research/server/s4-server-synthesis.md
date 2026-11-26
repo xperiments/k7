@@ -1,5 +1,7 @@
 # Server research: synthesis and recommendation
 
+**Status:** research · **Updated:** 2026-10-16
+
 This is the server-side counterpart to `../01-library-architecture.md`. That document
 researched a **player**; the project is a **server**, and the conclusions differ sharply.
 Read this one for the server direction.

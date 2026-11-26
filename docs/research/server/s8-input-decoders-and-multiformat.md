@@ -1,5 +1,7 @@
 # S8 — Decoding the expanded input set, and what six inputs / two outputs do to the architecture
 
+**Status:** research · **Updated:** 2026-10-16
+
 **Question:** the radio server must now read **MP3, Ogg Vorbis, Opus, WebM, FLAC, WAV** off SD,
 resample to one station format, and serve **MP3 and/or Opus-in-Ogg** forever. What does decoding
 each cost on an ESP32-S3, and what does "many formats" do to the design?

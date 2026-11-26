@@ -1,5 +1,7 @@
 # S6 — Complete codec & container licensing/patent matrix for the server's format set
 
+**Status:** research · **Updated:** 2026-10-16
+
 Scope: the redistributable ESP32-S3 radio-server library. **Output:** MP3, Opus-in-Ogg.
 **Input:** MP3, Ogg Vorbis, Opus, WebM (Matroska/EBML carrying Opus or Vorbis), plus FLAC
 and WAV.

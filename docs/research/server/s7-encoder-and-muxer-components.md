@@ -1,5 +1,7 @@
 # S7 — Concrete encoder + muxer components to vendor (MP3 and Opus-in-Ogg)
 
+**Status:** research · **Updated:** 2026-10-16
+
 **Question:** which *obtainable* implementations should the ESP32-S3 radio server vendor for
 MP3 encoding and Opus-in-Ogg output, and what is the integration cost?
 

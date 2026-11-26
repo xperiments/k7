@@ -1,5 +1,7 @@
 # Server-side code review: `resources/` as it actually is
 
+**Status:** research · **Updated:** 2026-10-16
+
 Findings from reading the existing server code directly, independent of the external
 research in this directory. These are code-level facts about `resources/`, not research
 claims, so they carry no external citations — every line reference is to the file itself.

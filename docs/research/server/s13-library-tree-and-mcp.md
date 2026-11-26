@@ -1,6 +1,8 @@
 # A boot-built library tree, JSON and binary serving, recursive playback, and a mini MCP
 
-**Status:** design and research; no source changed. Written 2026-10-19. The repository is at
+**Status:** research · **Updated:** 2026-11-05
+
+**Scope:** design and research; no source changed. Written 2026-10-19. The repository is at
 `9b338e2` with unrelated art/UI changes in the working tree.
 
 **Question:** the current "playlist" has no object in the code. What should replace it so that

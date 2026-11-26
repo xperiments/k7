@@ -1,5 +1,7 @@
 # K7: a global campaign — what to do, and what to refuse
 
+**Status:** research · **Updated:** 2026-11-03
+
 Researched 2026-11-03 against two kinds of primary source: **this repository** (the product's
 own specifications, ADRs and measured board status) and **the platforms' own documentation**
 (Meta, TikTok, Google, web.dev, the European Commission). Every claim below carries the file

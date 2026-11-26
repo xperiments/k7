@@ -1,5 +1,7 @@
 # Licensing decisions verified directly (2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 These are the licence facts I confirmed by reading the files myself, because they change how
 the component must be packaged. The full matrix with 60 citations is in
 `s6-codec-licensing-matrix.md`; this file records only what I verified first-hand and what it

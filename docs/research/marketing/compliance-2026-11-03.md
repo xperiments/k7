@@ -1,5 +1,7 @@
 # CE and FCC for K7: what it costs, what blocks it, and what to do first
 
+**Status:** research · **Updated:** 2026-11-03
+
 Researched 2026-11-03. Costs are **indicative market ranges**, not quotes — a laboratory offer is
 the only number that binds. Legal statements are read on the European Commission's own page where
 cited; the rest is engineering judgement, and it says so.

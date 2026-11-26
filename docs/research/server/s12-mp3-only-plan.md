@@ -1,5 +1,7 @@
 # MP3-only server: the plan
 
+**Status:** research · **Updated:** 2026-10-16
+
 **Final scope, replacing all earlier expansions:**
 
 - **Input: MP3, FLAC, WAV** (exactly the three already implemented in `resources/mi_decode.c`)

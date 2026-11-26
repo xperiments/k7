@@ -1,6 +1,8 @@
 # WebDAV: what actually mounts, what it costs, and whether it is worth it here
 
-**Status:** research only; no source changed. Written 2026-10-30. Repository at
+**Status:** obsolete · **Updated:** 2026-10-31
+
+**Scope:** research only; no source changed. Written 2026-10-30. Repository at
 `12c83c5`. The `method[8]` table in §1.1 was measured against this commit's host build.
 
 > **Rejected 2026-10-31.** The global premise in `docs/specs/CONTEXT.md` forbids serving a

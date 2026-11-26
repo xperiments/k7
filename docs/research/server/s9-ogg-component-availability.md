@@ -1,5 +1,7 @@
 # Ogg/Opus component availability — verified directly from the registry (2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 These are checks I ran myself against the ESP Component Registry API and upstream source,
 because component availability decides the whole output-format plan. Each entry is a fact
 about what exists today, with the evidence.

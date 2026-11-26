@@ -1,5 +1,7 @@
 # Adding a local I2S DAC to the broadcast appliance
 
+**Status:** research · **Updated:** 2026-10-31
+
 ## Verdict
 
 - **The seam exists and is one function deep.** `emit_chunk()` hands a post-EQ, post-trim,

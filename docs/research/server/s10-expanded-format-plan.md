@@ -1,5 +1,7 @@
 # Expanded format set (MP3, Opus/Ogg, Vorbis, WebM): what it actually costs
 
+**Status:** research · **Updated:** 2026-10-16
+
 Synthesis of the second research round, for the requirement change to:
 
 - **Output:** MP3, and/or Opus in Ogg

@@ -1,5 +1,7 @@
 # S2 — Can an ESP32-S3 encode audio in real time? (encoder feasibility)
 
+**Status:** research · **Updated:** 2026-10-16
+
 **Question:** the radio server (`resources/mini_icecast.c`) decodes MP3/FLAC/WAV off SD,
 resamples to one station format, and streams **raw PCM** in a WAV body — 176 KB/s
 (~1.41 Mbit/s) *per client* (`mini_icecast.c:11`). If it encoded instead, which encoder is

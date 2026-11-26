@@ -1,5 +1,7 @@
 # Where the money is (or is not) for xtape
 
+**Status:** research · **Updated:** 2026-11-26
+
 Research date: **2026-10-30**. All prices are as fetched on that date; anything not fetched
 is marked *unverified*. Every number below has a link. Where a source is a vendor's own
 pricing or licence page I say so; where it is a lab/molder's published guide I label it

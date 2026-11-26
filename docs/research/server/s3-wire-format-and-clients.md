@@ -1,5 +1,7 @@
 # S3 — Is the endless WAV/HTTP stream the right wire format? (server/emitter side)
 
+**Status:** research · **Updated:** 2026-10-16
+
 Scope: the **emitter** design in `resources/mini_icecast.c` and **client compatibility**. The
 client's own ICY *parsing* is already covered by `03-transport-verified-locally.md` and
 `06-who-sends-icy-status-line.md`; this note does not redo it.
