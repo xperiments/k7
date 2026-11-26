@@ -96,7 +96,7 @@ the API is not in doubt, and everything below is memory, flash and the radio.
 
 **[measured]** The player *with* the Bluetooth stack, on the bench, in the uncommitted tree that
 built it: **1.42 MB**, and "the stack does not fit the 1 MB app partition"
-([`docs/design/k7player/issues/08-the-player-speaker-output.md`](../design/k7player/issues/08-the-player-speaker-output.md)
+([`docs/design/k7player/issues/08-the-player-speaker-output.md`](../archive/design/k7player/issues/08-the-player-speaker-output.md)
 lines 52–56). The same ticket records the partition table that was needed to hold it on 4 MB flash:
 **nvs 24 K, phy 4 K, factory 3 MB** — leaving ~1.6 MB of the 4 MB unused.
 
@@ -389,7 +389,7 @@ different device, not an output option.
    note over A2DP, so no variant can claim B2/B3 of the spec.
 6. **PL-10's ten-minute measurement**, which was never run: both radios live, dropouts counted, the
    ring's occupancy at its worst, and the K7's encoder frame cost beside it
-   ([ticket 10](../design/k7player/issues/10-the-speaker-cost-measured.md) lines 18–20).
+   ([ticket 10](../archive/design/k7player/issues/10-the-speaker-cost-measured.md) lines 18–20).
 
 ---
 
@@ -499,8 +499,8 @@ records the decision.
 - [`docs/adr/0101-the-speaker-code-waits-in-the-history-not-the-tree.md`](../adr/0101-the-speaker-code-waits-in-the-history-not-the-tree.md) — the history claim, line 25.
 - [`docs/adr/0102-the-players-ring-is-96-kb-and-clears-itself-rather-than-dropping-frames.md`](../adr/0102-the-players-ring-is-96-kb-and-clears-itself-rather-than-dropping-frames.md) — the 96 KB ring and the 85 KB/43 KB census, lines 33–45, 83.
 - [`docs/adr/0097-the-player-is-an-esp32-classic-in-its-own-project.md`](../adr/0097-the-player-is-an-esp32-classic-in-its-own-project.md), [`0105`](../adr/0105-the-player-is-esp-now-only.md) — the chip and the one transport.
-- [`docs/design/k7player/issues/08-the-player-speaker-output.md`](../design/k7player/issues/08-the-player-speaker-output.md) — the 1.42 MB image, the 3 MB factory partition, the `dram0_0_seg overflowed by 10 920 bytes`, 112 664 B/98 304 B, the ladder, the bench speaker, lines 44–56, 63–90, 113–128.
-- [`docs/design/k7player/issues/10-the-speaker-cost-measured.md`](../design/k7player/issues/10-the-speaker-cost-measured.md) — the measurement that was never run.
+- [`docs/design/k7player/issues/08-the-player-speaker-output.md`](../archive/design/k7player/issues/08-the-player-speaker-output.md) — the 1.42 MB image, the 3 MB factory partition, the `dram0_0_seg overflowed by 10 920 bytes`, 112 664 B/98 304 B, the ladder, the bench speaker, lines 44–56, 63–90, 113–128.
+- [`docs/design/k7player/issues/10-the-speaker-cost-measured.md`](../archive/design/k7player/issues/10-the-speaker-cost-measured.md) — the measurement that was never run.
 - [`docs/specs/k7player.md`](../specs/k7player.md) — R28 and the prime, lines 139–152; R13, lines 71–73.
 - [`player/build/k7player.bin`](../../player/build/k7player.bin) and `player/build/k7player.map`, read with `esp_idf_size` — 891 712 B; flash code 652 454, data 130 880; IRAM 89 859/131 072; DRAM 176 175/180 736, `.bss` 157 816.
 - `player/sdkconfig:3696` (`WIFI_TASK_PINNED_TO_CORE_0`), `player/components/board_player/board_player_esp32.c:283,353`, `player/components/player/include/player_ring.h:38`.

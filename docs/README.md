@@ -8,11 +8,11 @@ and their glossaries — and this file is the map of the documents themselves.
 |---|---|---|
 | [`adr/`](./adr/) | Decisions the specs could not settle. An accepted ADR is superseded by a newer one, never rewritten; `## Supersedes` names what it retires | You are changing a decision, or asking why one was made |
 | [`specs/`](./specs/) | What the system must do: the stream server, the app, the site, the look | You are changing behaviour — the spec is the contract |
-| [`design/`](./design/) | How a feature was implemented: one directory per feature, one ticket per file | You are working that feature, or reading what was tried |
+| [`design/`](./design/) | The feature being worked now: one directory per feature, one ticket per file, state on the board. A shipped feature's directory moves to `archive/design/` | You are working that feature |
 | [`research/`](./research/) | Explorations and comparisons of one moment: evidence and a conclusion, not current truth | You are deciding something that was already investigated |
 | [`agents/`](./agents/) | Instructions for agents: the issue tracker, the board and build procedure, session usage | You are setting up a session |
 | [`journey.md`](./journey.md) | The project's diary: a map of steps, each linking the document that owns it | You want the arc, not the rules |
-| [`archive/`](./archive/) | Documents that are no longer true, kept for their reasoning | Almost never — only when tracing why something was once done |
+| [`archive/`](./archive/) | Documents that are no longer true, kept for their reasoning — including every shipped feature's tickets | Almost never — only when tracing why something was once done |
 
 Do not read a folder to decide something; read the one document that owns it.
 

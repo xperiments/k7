@@ -16,6 +16,9 @@ notes. A ticket file is the work's own record — what to build, what to check, 
 - Implementation tickets are one file per ticket at
   `docs/design/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` — never a single
   combined tickets file.
+- **A shipped feature moves out.** When the board accepts a feature, its directory moves to
+  `docs/archive/design/<feature-slug>/`, so `docs/design/` holds live work only and the
+  reasoning of what shipped survives one level away.
 - **State and dependencies are not in the file.** The board's task carries them — `start`,
   `finish`, `pause`, `depend` — and the ticket carries the work. The `Status:` and `Blocked by:`
   lines this document used to prescribe are gone: none of the 97 tickets ever had one, and a

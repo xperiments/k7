@@ -85,7 +85,7 @@ profile. The level is the board's (R11) and the amplifier after it owns the rest
 
 **R13. The speaker is not in this firmware.** The A2DP source, the pairing rule and the sink
 switch were built and measured, then removed when ADR 0100 made the line the only output: the
-record is [PL-08](../design/k7player/issues/08-the-player-speaker-output.md) and the ADRs. If a speaker variant is ever built, that work
+record is [PL-08](../archive/design/k7player/issues/08-the-player-speaker-output.md) and the ADRs. If a speaker variant is ever built, that work
 is the starting point, not a design.
 
 **R14. The light says nothing about the output.** It reports the stream (§ 5).

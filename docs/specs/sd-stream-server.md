@@ -479,7 +479,7 @@ at a time:
 - **One listener, and a second one is refused.** The K7 is a personal player, not a station:
   one pair of ears, so the broadcast carries one `/stream` client and a second is answered
   with the station's existing `503` and its sentence, `every stream slot is taken; try again
-  in a moment`, rather than being given airtime ([EN-07](../design/espnow-player/issues/07-one-audio-client-at-a-time.md),
+  in a moment`, rather than being given airtime ([EN-07](../archive/design/espnow-player/issues/07-one-audio-client-at-a-time.md),
   [ADR 0107](../adr/0107-the-k7-carries-one-listener.md)). The HTTP connection pool
   (`max_conns`) is a separate budget and stays at four, because the API and the page need it
   and a registered listener releases its worker. The ESP-NOW player is not an HTTP client at

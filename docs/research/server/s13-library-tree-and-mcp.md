@@ -446,7 +446,7 @@ matched a node from the scan. That is the security model: **the tree is the allo
 Two details worth stating because they are where implementations go wrong:
 
 - **Case.** FATFS is configured case-insensitively and the board has been observed to serve
-  `/music/TONE-44100.FLAC` for `tone-44100.flac` ([`issues/08`](../../../docs/design/sd-stream-server/issues/08-browsable-library-and-downloads.md),
+  `/music/TONE-44100.FLAC` for `tone-44100.flac` ([`issues/08`](../../archive/design/sd-stream-server/issues/08-browsable-library-and-downloads.md),
   board run note). The tree stores the card's exact bytes. `lib_find()` matches exact first,
   then ASCII-case-insensitively; if the fallback matches more than one node (possible on the
   host's case-sensitive filesystem, impossible on FAT), it refuses as ambiguous rather than
@@ -1091,7 +1091,7 @@ that can prove the boot-time cost.
 ### 6.1 Arena and JSON size model
 
 A synthetic tree with representative names (artist/album/NN - title.ext), computed by
-`docs/design/library-tree/arena_model.py`; it is a model, not a card measurement.
+`docs/archive/design/library-tree/arena_model.py`; it is a model, not a card measurement.
 
 | Library | Nodes | Binary | JSON | Notes |
 |---|---:|---:|---:|---|
@@ -1235,7 +1235,7 @@ through MCP. That is what `/api/library` is for.
   card/limits 100-107), [`docs/adr/0004-ui-memory-is-external.md`](../../../docs/adr/0004-ui-memory-is-external.md).
 - Domain language: [`docs/specs/CONTEXT.md`](../../../docs/specs/CONTEXT.md) (music directory 11-14).
 - HTTP contract: [`docs/specs/sd-stream-server.md`](../../../docs/specs/sd-stream-server.md) §6-§7.
-- Existing card-index ticket: [`docs/design/sd-stream-server/issues/08-browsable-library-and-downloads.md`](../../../docs/design/sd-stream-server/issues/08-browsable-library-and-downloads.md).
+- Existing card-index ticket: [`docs/design/sd-stream-server/issues/08-browsable-library-and-downloads.md`](../../archive/design/sd-stream-server/issues/08-browsable-library-and-downloads.md).
 
 **MCP (primary):**
 
@@ -1247,7 +1247,7 @@ through MCP. That is what `/api/library` is for.
   tools-only, caps the body at 8192, validates `Origin`/`Host`, and advertises `_mcp._tcp`.
   It is not reusable code (different build system and HTTP stack), but it is the protocol
   reference for this design.
-- Full evidence trail for this section: [`docs/design/library-tree/research-mcp.md`](../../../docs/design/library-tree/research-mcp.md)
+- Full evidence trail for this section: [`docs/design/library-tree/research-mcp.md`](../../archive/design/library-tree/research-mcp.md)
   (254 lines, spec-repo release-tag permalinks and SDK source).
 - 2026-07-28 changelog: <https://modelcontextprotocol.io/specification/2026-07-28/changelog.md>
   (sessions removed, `initialize`/`ping` removed, `server/discover`, `resultType`, headers).
@@ -1266,7 +1266,7 @@ through MCP. That is what `/api/library` is for.
 
 **ESP-IDF/FatFs (the scan, path and memory facts):**
 
-- Full evidence trail, tagged [V]/[E]/[U] with line numbers: [`docs/design/library-tree/research-esp.md`](../../../docs/design/library-tree/research-esp.md).
+- Full evidence trail, tagged [V]/[E]/[U] with line numbers: [`docs/design/library-tree/research-esp.md`](../../archive/design/library-tree/research-esp.md).
 - VFS path truncation and per-open-dir allocation:
   [`vfs_fat.c`](https://github.com/espressif/esp-idf/blob/v6.1/components/fatfs/vfs/vfs_fat.c#L61-L62)
   (`prepend_drive_to_path`, `FILENAME_MAX+3` = 1027-byte buffer here), `vfs_fat_opendir` and `vfs_fat_dir_alloc`
@@ -1281,5 +1281,5 @@ through MCP. That is what `/api/library` is for.
   attributes are in `FILINFO`; the VFS `readdir` does not expose them).
 - jsmn: <https://github.com/zserge/jsmn> (single header, no allocation).
 
-**Model:** `docs/design/library-tree/arena_model.py` (sizes in §6.1); run it with
-`python3 docs/design/library-tree/arena_model.py`.
+**Model:** `docs/archive/design/library-tree/arena_model.py` (sizes in §6.1); run it with
+`python3 docs/archive/design/library-tree/arena_model.py`.

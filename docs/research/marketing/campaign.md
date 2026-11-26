@@ -436,7 +436,7 @@ money, and confusing the two is how a campaign reports success while selling not
 ### 8.1 What each surface physically accepts
 
 Read from the platforms' own references on 2026-11-03; the full sheet, with every URL and the
-doc's own "last updated" date, is [`facts-2026-11-03.md`](./facts-2026-11-03.md).
+doc's own "last updated" date, is [`facts-2026-11-03.md`](../../archive/marketing/facts-2026-11-03.md).
 
 | Surface | Ratio | Max length | Max file | Ceiling that shapes the edit |
 |---|---|---|---|---|
@@ -835,7 +835,7 @@ not make the claim attached to it.
 | **Trademark clearance for "K7"** | "K7" is an ordinary word in French, which weakens it there and collides elsewhere. | A clearance search (EUIPO, INPI, USPTO) before paid media; if it fails, the campaign can still run under a distinct brand with K7 as a model name. |
 
 The CE/FCC line has its own brief — what applies, what the certified module buys, the security
-model that decides it, and the costs — in [`compliance-2026-11-03.md`](./compliance-2026-11-03.md).
+model that decides it, and the costs — in [`compliance-2026-11-03.md`](../../archive/marketing/compliance-2026-11-03.md).
 
 **Consequence for the plan.** Until CE and FCC are cleared, there is no "buy" button — only the
 build list, the guide and the price signal (*"we are aiming at €X"*), and even the price signal
@@ -899,8 +899,8 @@ built is not a video but a page with a field on it.
 
 All external pages were read on **2026-11-03**; the two evidence files beside this document keep
 the raw rows, including each page's own "last updated" date:
-[`facts-2026-11-03.md`](./facts-2026-11-03.md) (platforms, web, policy) and
-[`market-2026-11-03.md`](./market-2026-11-03.md) (industry data, prices, the word).
+[`facts-2026-11-03.md`](../../archive/marketing/facts-2026-11-03.md) (platforms, web, policy) and
+[`market-2026-11-03.md`](../../archive/marketing/market-2026-11-03.md) (industry data, prices, the word).
 
 ### 15.1 This repository
 
@@ -1211,7 +1211,7 @@ Being without income is not a detail to design around later; it decides what the
 | **Reserve list** (no payment) | That people want it, in numbers | Nothing but the page and the traffic | None — and it converts no cash. |
 | **Pre-order with a deposit** | That people will pay | Entity, terms, refund policy, **and CE/FCC cleared** (§13.1) | Taking money before compliance is the one mistake that ends a small hardware project. |
 | **A small kit run** | That it can be assembled and shipped | A legal read on selling modules + panel as components rather than a finished apparatus; shipping and support | Thin margin, thick support load. |
-| **A grant** | That the work is worth funding before it sells | A proposal, a budget, an eligible applicant (some funds take individuals), and months of patience | Slow; and the campaign is the evidence, so the campaign still has to exist first. The one fund that fits, verified on 2026-11-03, is [written up here](./funding-2026-11-03.md). |
+| **A grant** | That the work is worth funding before it sells | A proposal, a budget, an eligible applicant (some funds take individuals), and months of patience | Slow; and the campaign is the evidence, so the campaign still has to exist first. The one fund that fits, verified on 2026-11-03, is [written up here](../../archive/marketing/funding-2026-11-03.md). |
 
 The sequencing that makes sense at €0 with time: **reserve list now → compliance quote in hand by
 week 8 → choose between the deposit and the grant with real numbers.** A refundable deposit is a
