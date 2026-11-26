@@ -4228,7 +4228,7 @@
     {
       "id": "HA-05",
       "title": "The player finds the deck by the name it was handed",
-      "state": "review",
+      "state": "done",
       "group": "HA",
       "deps": ["HA-04"],
       "yolo": true,
@@ -4251,7 +4251,7 @@
     {
       "id": "HA-06",
       "title": "Home Assistant's page for the deck",
-      "state": "review",
+      "state": "done",
       "group": "HA",
       "deps": ["HA-01", "HA-02"],
       "yolo": true,
