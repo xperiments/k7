@@ -4278,7 +4278,14 @@
       "group": "K7",
       "at": "2026-11-25T21:24:58Z",
       "by": "dsh",
-      "desc": "Opening the editor at /k7art (no trailing slash) drew every label and J-card text in the browser's fallback face: the title measured 189 px of ink where the sheet's Archivo Narrow is 162 px, and Preview fell back to a different face again. /k7art/ (with the slash) was correct, which is why it looked fine from the App's link.\n\nThe editor fetched its three faces relative to the page's URL, so /k7art asked for /fonts/*.ttf - the Site's own page, HTML where a face was expected - and all three FontFaces failed. The faces now resolve against the build's base, and a face that does not parse is never registered for the preview.\n\nCheck: open /k7art and /k7art/ on the same design and compare Design with Preview. Both should wear Archivo Narrow 600 / Barlow Condensed 700 / IBM Plex Mono 500 at 32/78/18, and the title's ink should be 162 px at either address. The two Preview canvases are pixel-identical.\n\nVerified with the new assets test, the editor's 105 unit tests, 24 Playwright tests, and the built page at both addresses."
+      "desc": "Opening the editor at /k7art (no trailing slash) drew every label and J-card text in the browser's fallback face: the title measured 189 px of ink where the sheet's Archivo Narrow is 162 px, and Preview fell back to a different face again. /k7art/ (with the slash) was correct, which is why it looked fine from the App's link.\n\nThe editor fetched its three faces relative to the page's URL, so /k7art asked for /fonts/*.ttf - the Site's own page, HTML where a face was expected - and all three FontFaces failed. The faces now resolve against the build's base, and a face that does not parse is never registered for the preview.\n\nCheck: open /k7art and /k7art/ on the same design and compare Design with Preview. Both should wear Archivo Narrow 600 / Barlow Condensed 700 / IBM Plex Mono 500 at 32/78/18, and the title's ink should be 162 px at either address. The two Preview canvases are pixel-identical.\n\nVerified with the new assets test, the editor's 105 unit tests, 24 Playwright tests, and the built page at both addresses.",
+      "notes": [
+        {
+          "at": "2026-11-26T00:35:48Z",
+          "by": "dsh",
+          "text": "Work is on master as 4ad3dff: the editor's faces resolve against the build's base, so /k7art and /k7art/ both wear the sheet's type. Nothing left to build; approve to close."
+        }
+      ]
     },
     {
       "id": "K7-19",
@@ -4287,7 +4294,14 @@
       "group": "K7",
       "at": "2026-11-25T21:55:13Z",
       "by": "dsh",
-      "desc": "Publishing a K7Art whose J-card text names a label Slot - the artist, the album, a genre - was refused with 'song_artist is not a J-card field (title, artist, meta)': 22 errors over six designs, although the spec and the editor's own field list allow the label's eleven Slots. The browser packer and the build's Python packer were the only places still holding the old three-field rule. Both now use the vocabulary's Slots plus title, artist and meta, and the spec's refusal table, the glossary, label-templates and the editor's guide say the same.\n\nCheck: import one of the designs that was refused and press Publish - it downloads the pack; bind a J-card text to 'year' and Publish still refuses it by name.\n\nVerified: the Python packer packs k7.neon with song_artist and song_album on its J-card; the browser-packer test does the same and refuses 'year'; Publish downloaded neon.k7artpack from the imported design; 106 unit tests, 24 Playwright tests, the Python selftest and make -C host check (184 checks)."
+      "desc": "Publishing a K7Art whose J-card text names a label Slot - the artist, the album, a genre - was refused with 'song_artist is not a J-card field (title, artist, meta)': 22 errors over six designs, although the spec and the editor's own field list allow the label's eleven Slots. The browser packer and the build's Python packer were the only places still holding the old three-field rule. Both now use the vocabulary's Slots plus title, artist and meta, and the spec's refusal table, the glossary, label-templates and the editor's guide say the same.\n\nCheck: import one of the designs that was refused and press Publish - it downloads the pack; bind a J-card text to 'year' and Publish still refuses it by name.\n\nVerified: the Python packer packs k7.neon with song_artist and song_album on its J-card; the browser-packer test does the same and refuses 'year'; Publish downloaded neon.k7artpack from the imported design; 106 unit tests, 24 Playwright tests, the Python selftest and make -C host check (184 checks).",
+      "notes": [
+        {
+          "at": "2026-11-26T00:35:48Z",
+          "by": "dsh",
+          "text": "Work is on master as 4399a65: both packers take the label's Slots plus title, artist and meta, and still refuse 'year'. Nothing left to build; approve to close."
+        }
+      ]
     },
     {
       "id": "K7-20",
@@ -4296,7 +4310,14 @@
       "group": "K7",
       "at": "2026-11-25T23:06:48Z",
       "by": "dsh",
-      "desc": "On Albums, a case with no cover picture shows its K7Art's spine on its left face at full brightness, while every case with a picture sits under a 65% overlay - so one white or bright spine stood out in a row of dark ones. The J-card spine now takes the same absolute inset-0 overlay, in the App's shelf and in the editor's J-card Preview (which is the App's shelf, k7art.md 6). The byline a pool with no design falls back to is left undimmed, because it is the App's own text and must stay legible.\n\nCheck: on Albums, the spine of a coverless case now reads as dark as its neighbours; a case with a picture is unchanged; the editor's J-card Preview matches.\n\nVerified: the app's 985 tests, typecheck and build; the editor's 106 tests, build and 24 Playwright tests; make -C host check (216 label checks); the shelf checked with seeded albums."
+      "desc": "On Albums, a case with no cover picture shows its K7Art's spine on its left face at full brightness, while every case with a picture sits under a 65% overlay - so one white or bright spine stood out in a row of dark ones. The J-card spine now takes the same absolute inset-0 overlay, in the App's shelf and in the editor's J-card Preview (which is the App's shelf, k7art.md 6). The byline a pool with no design falls back to is left undimmed, because it is the App's own text and must stay legible.\n\nCheck: on Albums, the spine of a coverless case now reads as dark as its neighbours; a case with a picture is unchanged; the editor's J-card Preview matches.\n\nVerified: the app's 985 tests, typecheck and build; the editor's 106 tests, build and 24 Playwright tests; make -C host check (216 label checks); the shelf checked with seeded albums.",
+      "notes": [
+        {
+          "at": "2026-11-26T00:35:48Z",
+          "by": "dsh",
+          "text": "Work is on master as 7a32e3f, with the spine's byline kept legible in 75d07dc. Nothing left to build; approve to close."
+        }
+      ]
     }
   ]
 }
