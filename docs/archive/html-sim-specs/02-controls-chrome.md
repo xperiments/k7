@@ -1,5 +1,7 @@
 # 02 — Controls chrome: drawer, DJ block, bands, window
 
+**Status:** obsolete · **Updated:** 
+
 Implementation spec for a pixel-for-pixel HTML/SolidJS redraw of the **controls state**
 of the cassette screen: the transport drawer at the left, the DJ block at the right, the
 header and K7 badge across the top, the footer band across the bottom, and the (mostly

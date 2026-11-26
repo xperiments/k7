@@ -329,7 +329,7 @@ Home Assistant can show the deck as a media player — play, next and previous, 
 broadcast cannot honour — with one `rest` sensor, three `rest_command`s and a `template`
 `media_player`: no broker, no token, no integration. The configuration to paste, the deck's own
 name in place of `k7.local`, and the `id` that keeps the entity's identity across renames and
-leases are in [`docs/home-assistant.md`](docs/home-assistant.md).
+leases are in [`docs/specs/home-assistant.md`](docs/specs/home-assistant.md).
 MQTT cannot give the deck a media player at all: Home Assistant has no MQTT media-player platform,
 so a broker would buy every entity except the one worth having.
 

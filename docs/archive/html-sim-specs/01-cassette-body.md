@@ -1,5 +1,7 @@
 # 01 — Cassette body: the "Bare" screen (800×480)
 
+**Status:** obsolete · **Updated:** 
+
 Implementation spec for a pixel-for-pixel HTML/SolidJS redraw. Every number below is
 either read off the C or computed from it with the C's own integer rules; the computed
 ones are marked *(computed)* and reproduced as worked values so the front-end never has

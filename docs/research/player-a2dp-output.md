@@ -428,7 +428,7 @@ The claim does not hold. What was checked, on 2026-11-19:
   strings `esp_a2dp`, `esp_a2d`, `esp_bt_controller`, `btc_a2dp`, `esp_bluedroid` and `a2dp_sink`
   occur in **no object at all**. "a2dp" occurs in 14 blobs, every one of them Markdown or a comment:
   `CONTEXT-MAP.md`, `player/CONTEXT.md`, `docs/specs/k7player.md` (five revisions), ADR 0097, ADR
-  0100, ADR 0101, PL-08, PL-04, `docs/design/misc/service-surface/current-services.md`, and the
+  0100, ADR 0101, PL-08, PL-04, `docs/research/service-surface-snapshot.md`, and the
   comment in `player/sdkconfig.defaults`. `PLAYER_OUTPUT_SPEAKER` occurs in three: PL-08 and the two
   ADRs.
 - `git log --all --diff-filter=D -- "*speaker*"` is empty, and no path containing `speaker` or

@@ -1,5 +1,7 @@
 # Current service surface (code-verified)
 
+**Status:** research · **Updated:** 
+
 Scope: the firmware in this checkout as it is implemented today, plus the host tier and the
 research/ADR trail where it explains a choice. Every claim cites `path:line`. Labels used
 throughout: **IMPLEMENTED** (compiled into the default firmware), **OPT-IN** (build flag),

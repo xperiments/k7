@@ -1,5 +1,7 @@
 # 04 — The peek overlay and the mouse-gesture state machine
 
+**Status:** obsolete · **Updated:** 
+
 Implementation spec for a pixel-for-pixel HTML/SolidJS port of the ESP32 screen's peek
 overlay and of the whole touch policy, expressed as mouse rules.
 

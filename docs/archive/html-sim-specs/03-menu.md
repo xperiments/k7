@@ -1,5 +1,7 @@
 # 03 — The Menu mode (Root / Tracks / Browse / Settings / Station / Library / About)
 
+**Status:** obsolete · **Updated:** 
+
 Implementation spec for a pixel-for-pixel HTML/SolidJS port of the firmware's **Menu**, a
 *mode of the Controls* (not a screen): the cassette area becomes a five-row list, the DJ block
 becomes the **Pad**, and the transport drawer becomes **Close / Back / Enter**

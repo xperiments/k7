@@ -1,5 +1,7 @@
 # Home Assistant
 
+**Status:** accepted · **Updated:** 
+
 A K7 can sit on a Home Assistant dashboard as a **media player** — play, next, previous — with
 no broker, no token, no cloud account and no custom integration. The entity is one `rest` sensor,
 three `rest_command`s and one `template` media player, in the file you already edit.
@@ -141,7 +143,7 @@ with `media_player.play_media` (`media_content_type: music`, the stream URL as
 `media_content_id`) — Chromecast needs the literal IP, it ignores mDNS. The deck has **one**
 listener slot, so one room directly, or Music Assistant in front of it to fan one pull out to
 several. That is a different job from this page, and
-[`research/home-assistant-feasibility.md`](research/home-assistant-feasibility.md) works it out.
+[`../research/home-assistant-feasibility.md`](../research/home-assistant-feasibility.md) works it out.
 
 ## What to check
 

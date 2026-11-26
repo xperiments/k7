@@ -163,7 +163,7 @@ has **both directions**:
 since 2026.2 (PR [#161547](https://github.com/home-assistant/core/pull/161547)), so xtape's stateless
 POST `/mcp` *is* its shape and it connects. What it buys is smaller than it looks: an MCP client
 creates no entities, so the dashboard player people actually want comes from `rest`/`template`
-with no firmware change — [`../../home-assistant.md`](../../home-assistant.md) and the research
+with no firmware change — [`../../specs/home-assistant.md`](../../specs/home-assistant.md) and the research
 [`../home-assistant-feasibility.md`](../home-assistant-feasibility.md) settle it.
 
 > **The original claim, kept as the record of what was believed when this note was written:**
