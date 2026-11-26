@@ -1,6 +1,7 @@
 # Bluetooth A2DP as the K7Player's output: the feasibility box
 
 **Status:** research · **Updated:** 2026-11-19
+**Conclusion:** A2DP is supported on the ESP32, but one radio cannot stream and page: a speaker needs a second radio, not another build.
 
 **The question.** A classic ESP32 (ESP32-D0WD, WROOM-32: 4 MB flash, 520 KB SRAM, no PSRAM) receives
 a 128 kbps MP3 stream over ESP-NOW and plays it on an I2S line (PCM5102A). Could the same board

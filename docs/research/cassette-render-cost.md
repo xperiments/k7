@@ -1,6 +1,7 @@
 # What every cassette area costs to draw: the two poses, the rectangle count and the mask's tax (2026-11-09)
 
 **Status:** research · **Updated:** 2026-11-09
+**Conclusion:** The lever is the number of dirty rectangles and whether the Card is up, not the pixels; the hub tick is the recurring bill.
 
 > **Status: measured on the board.** The Sunton 8048S050C ran an instrumented build of this
 > tree (the bench in `components/app/screen_display/cassette_bench.h`, behind

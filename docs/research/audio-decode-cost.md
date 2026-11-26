@@ -1,6 +1,7 @@
 # What a 24-bit / 192 kHz FLAC costs this board
 
 **Status:** research · **Updated:** 2026-10-29
+**Conclusion:** A source above 96 kHz is skipped by policy; 24/192 is over capacity, while 16-bit/44.1 kHz FLAC runs at 101.3% of real time.
 
 Measured on the Sunton ESP32-S3 (240 MHz, 8 MB octal PSRAM, SD over 20 MHz SPI,
 1-bit) while the station was 44,100 Hz / 256 kbps and one client was attached.

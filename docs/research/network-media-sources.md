@@ -1,6 +1,7 @@
 # Which network music sources are worth supporting
 
 **Status:** research · **Updated:** 2026-11-20
+**Conclusion:** Build Jellyfin first, Navidrome second, Emby third as a one-way import; no direct Plex or DLNA adapter.
 
 **Scope:** research only; no source changed. Written 2026-11-14 against `649bcdd` (plus
 untracked working-tree files); another lane committed `2399003` while it was being written. Every

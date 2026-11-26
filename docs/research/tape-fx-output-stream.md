@@ -1,6 +1,7 @@
 # Tape FX on the output stream
 
 **Status:** research · **Updated:** 2026-11-05
+**Conclusion:** Viable at about a sixth of the encoder's cost, though as written more than half goes to six avoidable per-sample library calls.
 
 > **Retired.** This effect was built, measured and then removed from the product at the
 > owner's request: it ran on the stream, but its character was too subtle to be worth the

@@ -1,6 +1,7 @@
 # HE-AAC verified from a live stream (2026-10-16)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** The aacp stream is plain AAC-LC/22050 Hz in its ADTS headers; SBR is invisible there, so only the decoder reveals the 44100 Hz output.
 
 The codec recommendation rests on a mechanism claim that is easy to state and rarely
 demonstrated: **HE-AAC streams advertise themselves as plain AAC-LC in their framing, and

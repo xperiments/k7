@@ -1,6 +1,7 @@
 # S5 — Emitting a live, never-ending Ogg stream: what must be implemented
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Hand-roll the ~130-line Ogg page writer and keep libogg only as a safety net; the container is the smallest part of the project.
 
 **Question:** the radio server (`resources/mini_icecast.c`) answers every client with an
 endless HTTP body. If the station moves to Opus (or Vorbis/MP3), what exactly has to be built

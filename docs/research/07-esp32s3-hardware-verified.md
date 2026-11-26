@@ -1,6 +1,7 @@
 # ESP32-S3 hardware facts, verified from primary sources (2026-10-16)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** The ESP32-S3 has no internal DAC, so every output path is an external I2S device, and the library must not assume PSRAM.
 
 Checked against the ESP-IDF tree installed at `~/.espressif/v5.4.2/esp-idf` and the
 corresponding upstream headers, rather than from memory. These constants gate the

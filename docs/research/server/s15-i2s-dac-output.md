@@ -1,6 +1,7 @@
 # Adding a local I2S DAC to the broadcast appliance
 
 **Status:** research · **Updated:** 2026-10-31
+**Conclusion:** The DAC fits as a second sink one function deep: tap emit_chunk() plus flush_pipeline(), with lead_ms as the jitter budget; pins decide the board.
 
 ## Verdict
 

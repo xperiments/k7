@@ -1,6 +1,7 @@
 # Wind and rewind on the live stream
 
 **Status:** research · **Updated:** 2026-10-26
+**Conclusion:** Wind with a recorded mechanical bed, a virtual position and one seek at release; true varispeed does not fit the core.
 
 Axis: **the transport has `prev`/`next` and the owner wants to add wind and rewind that feel like a
 cassette spooling the tape, with the mechanism audible — and asks whether that is affordable on this

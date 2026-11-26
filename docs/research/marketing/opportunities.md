@@ -1,6 +1,7 @@
 # Where the money is (or is not) for xtape
 
 **Status:** research · **Updated:** 2026-11-26
+**Conclusion:** Price a device, not a service: the plausible business is a $299–$399 design object at 300–1,000 units a year.
 
 Research date: **2026-10-30**. All prices are as fetched on that date; anything not fetched
 is marked *unverified*. Every number below has a link. Where a source is a vendor's own

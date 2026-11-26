@@ -1,6 +1,7 @@
 # Codec / decode layer for an ESP32‑S3 internet‑radio **player** component
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Ship MP3 plus AAC (LC and HE-AAC with SBR/PS) only, depending on esp_audio_codec with dr_mp3 as the permissive fallback.
 
 Axis: *which formats must be decoded, with which library, at what cost.*
 All sources fetched **2026‑10‑16** (host clock). Companions: `00-audit-of-resources.md`

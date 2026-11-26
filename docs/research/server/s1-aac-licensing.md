@@ -1,6 +1,7 @@
 # S1 — AAC licensing for the *server* direction
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** AAC enters nowhere unless deliberately added; keep the default build MP3/FLAC/WAV-only and make AAC an opt-in external dependency.
 
 Scope: the ESP-IDF **radio server** component (ESP32-S3): reads MP3/FLAC/WAV off SD,
 decodes to PCM, resamples to one fixed station format (stereo 16-bit), serves an

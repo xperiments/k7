@@ -1,6 +1,7 @@
 # Ogg/Opus component availability — verified directly from the registry (2026-10-16)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** An Ogg muxer does exist under a permissive licence: georgik/ogg (BSD-3, upstream libogg) is the portable core, esp_muxer the turnkey alternative.
 
 These are checks I ran myself against the ESP Component Registry API and upstream source,
 because component availability decides the whole output-format plan. Each entry is a fact

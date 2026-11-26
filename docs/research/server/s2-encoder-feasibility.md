@@ -1,6 +1,7 @@
 # S2 — Can an ESP32-S3 encode audio in real time? (encoder feasibility)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** An S3 can encode in real time, but the server needs no encoder: fix the station format first, then prefer micro-flac or shine MP3.
 
 **Question:** the radio server (`resources/mini_icecast.c`) decodes MP3/FLAC/WAV off SD,
 resamples to one station format, and streams **raw PCM** in a WAV body — 176 KB/s

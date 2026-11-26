@@ -1,6 +1,7 @@
 # Can the K7 and the K7Player live in Home Assistant?
 
 **Status:** research · **Updated:** 2026-11-25
+**Conclusion:** The K7 works in HA today with no firmware change; MQTT cannot give it a media_player, and the K7Player cannot be addressed at all.
 
 **Scope:** research only; no source changed. Written 2026-11-24 against `7aaa72a` (the working tree
 also carries other sessions' edits, which this note does not read as evidence).

@@ -1,6 +1,7 @@
 # xtape: a reusable ESP32-S3 internet-radio player component — architecture
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Yes, it can become a good library: keep the DSP middle, rebuild transport/decode/output; the two real risks are AAC licensing and the network↔DAC clock.
 
 This is the synthesis document. It turns the reconnaissance and research beside it into a
 concrete component design, and it states plainly what is proven, what is inferred, and

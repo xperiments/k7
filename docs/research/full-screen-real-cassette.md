@@ -1,6 +1,7 @@
 # A full-screen Real cassette: the mask's size, the two-finger swipe, and what the tape really costs per frame (2026-11-05)
 
 **Status:** research · **Updated:** 2026-11-05
+**Conclusion:** The mask fits and is affordable; the porthole loses to it, so full-screen Real belongs on the mask, not the porthole.
 
 > **Status: the porthole (§4e) was built, flashed and lost (§4.1); it is kept behind
 > `CARD_MASK 0` and off. The full-screen layout and the two-finger gesture are implemented on

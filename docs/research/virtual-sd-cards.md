@@ -1,6 +1,7 @@
 # Virtual local SD cards in the browser
 
 **Status:** research · **Updated:** 2026-11-12
+**Conclusion:** A virtual card is an OPFS tree, never a FAT image; capacity is a soft quota cap and SD materialisation is a file copy.
 
 Can the K7 app let a person compose a "virtual SD card" — a card-shaped tree of a chosen
 capacity into which they drag folders of music, measure the files, and keep `k7.db` + the card

@@ -1,6 +1,7 @@
 # Internet-radio player: network / transport layer (ESP32-S3, ESP-IDF component)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Use esp_http_client's streaming open/read loop, byte-level ICY framing, a byte-arrival watchdog and reconnect-with-backoff; never perform() for audio.
 
 Axis of this note: **everything between `esp_wifi` and the audio decoder** for an ESP-IDF
 component that plays internet radio streams for days at a time.

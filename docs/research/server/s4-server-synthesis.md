@@ -1,6 +1,7 @@
 # Server research: synthesis and recommendation
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** AAC enters nowhere: keep it out of the default build, and fix the endless-WAV wire format before adding any codec.
 
 This is the server-side counterpart to `../01-library-architecture.md`. That document
 researched a **player**; the project is a **server**, and the conclusions differ sharply.
@@ -47,7 +48,7 @@ the SD card) or add an encoder (to emit a compressed stream). Both are avoidable
   end-user product obtain a license."* So shipping AAC in xtape would silently transfer a
   licensing obligation onto xtape's users — a strong reason to keep it out of the core.
 
-**Conclusion:** keep AAC out. Optionally expose a *codec backend seam* so a downstream user
+**In short:** keep AAC out. Optionally expose a *codec backend seam* so a downstream user
 can add it themselves under their own license, but ship nothing AAC in the default build.
 
 ## 2. The bigger finding: the endless-WAV stream has a compatibility cliff

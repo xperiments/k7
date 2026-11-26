@@ -1,6 +1,7 @@
 # Packaging & licensing constraints (verified against sources, not recalled)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** It doesn't block an ESP32-S3 target but forbids vendoring; keep Espressif audio components external and the decoder a pluggable, permissively-licensed default.
 
 These are facts that gate the library's *shape* and its *legal ability to be depended
 on*. Each was checked directly against the registry or the upstream repository on

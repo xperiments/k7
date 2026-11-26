@@ -1,6 +1,7 @@
 # Expanded format set (MP3, Opus/Ogg, Vorbis, WebM): what it actually costs
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Make Opus-in-Ogg the default output and MP3 encode an opt-in backend; WebM is dropped and pass-through must be designed in now.
 
 Synthesis of the second research round, for the requirement change to:
 

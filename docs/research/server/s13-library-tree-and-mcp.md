@@ -1,6 +1,7 @@
 # A boot-built library tree, JSON and binary serving, recursive playback, and a mini MCP
 
 **Status:** research · **Updated:** 2026-11-05
+**Conclusion:** Build one immutable, boot-scanned library tree in a PSRAM arena and make the playlist an index into it; a legacy-era mini MCP is feasible.
 
 **Scope:** design and research; no source changed. Written 2026-10-19. The repository is at
 `9b338e2` with unrelated art/UI changes in the working tree.

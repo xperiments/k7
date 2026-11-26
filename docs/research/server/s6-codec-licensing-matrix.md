@@ -1,6 +1,7 @@
 # S6 — Complete codec & container licensing/patent matrix for the server's format set
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** The requested set is shippable and zero-royalty at both ends; only shine's LGPL-2.0 packaging and a VP8/VP9 video decoder are concerns.
 
 Scope: the redistributable ESP32-S3 radio-server library. **Output:** MP3, Opus-in-Ogg.
 **Input:** MP3, Ogg Vorbis, Opus, WebM (Matroska/EBML carrying Opus or Vorbis), plus FLAC

@@ -1,6 +1,7 @@
 # Can the ESP32-S3 also stream someone else's internet radio?
 
 **Status:** research · **Updated:** 2026-11-13
+**Conclusion:** The chip can, but the firmware is unproven alongside its own stream; the relay/tuner fits today, and pins are the wall.
 
 Date: **2026-11-12**. Reconciles the 2026-10-16 player research (`03`, `04`, `05`, `07`,
 `radio-player-*`, `server/s15`) with the firmware as it is today, re-verifies the load-bearing

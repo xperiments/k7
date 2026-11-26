@@ -1,6 +1,7 @@
 # Licensing decisions verified directly (2026-10-16)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** The set is shippable and royalty-free; make Opus-in-Ogg the default output and shine MP3 encode an opt-in LGPL-2.0 backend.
 
 These are the licence facts I confirmed by reading the files myself, because they change how
 the component must be packaged. The full matrix with 60 citations is in

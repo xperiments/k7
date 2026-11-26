@@ -1,6 +1,7 @@
 # The tone on the player: where the K7's EQ should run when the radio carries the audio
 
 **Status:** research · **Updated:** 2026-11-20
+**Conclusion:** Move the tone to the player only if it is the player's room control; the win is latency, not CPU or codec quality.
 
 **The question.** The K7's one audio effect is the DJ tone — GAIN, HI, MID and LOW on the right
 bar. Today it runs on the S3, on the PCM chunk the encoder is about to take. When the K7's

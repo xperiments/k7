@@ -1,6 +1,7 @@
 # MP3-only server: the plan
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Final scope is MP3-only: vendor shine, output audio/mpeg at 44.1 kHz/128 kbps CBR joint stereo, and drop the WAV header.
 
 **Final scope, replacing all earlier expansions:**
 

@@ -1,6 +1,7 @@
 # How to test what Ask understands, and what Chrome lets us change
 
 **Status:** research · **Updated:** 2026-11-15
+**Conclusion:** Build the harness first, freeze a 60-sentence corpus, then change one thing at a time; the 10/12 never measured the shipped path.
 
 **Scope:** research only; no source changed and no model run. Written 2026-11-14 against
 `646ca76`; the working tree also carries another lane's uncommitted Snapshot, image-source and

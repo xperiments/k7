@@ -1,6 +1,7 @@
 # BPM, key, mood and energy for a webapp that ingests MP3 and FLAC
 
 **Status:** research · **Updated:** 2026-10-21
+**Conclusion:** Open source and non-commercial settles the licence: use the AGPL `essentia.js` build plus CC BY-NC MTG weights, browser-first, not the permissive Beat This workaround.
 
 **Scope:** research only; no source changed. Written 2026-10-20 on the `xtape` checkout
 (`abcb8f7` plus untracked working-tree files). All timings were taken on this machine: Apple

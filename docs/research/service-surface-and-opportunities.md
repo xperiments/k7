@@ -1,6 +1,7 @@
 # What the appliance serves today, and what those services could be sold for
 
 **Status:** research · **Updated:** 2026-11-25
+**Conclusion:** Sell the object or integration work, not software: close provisioning, OTA and auth first, and keep MCP and the library API free.
 
 **Scope:** research only; no source changed. Written 2026-10-30 against `12c83c5` plus the
 working-tree UI changes.

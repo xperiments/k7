@@ -1,6 +1,7 @@
 # A track change starves the stream because the decoded ring starts empty and the rewind is clocked by the audio it is losing
 
 **Status:** research · **Updated:** 2026-11-07
+**Conclusion:** The source was never expensive; core 0 was being taken from it, and the screen-side fix removed every starvation rebase.
 
 Measured on the Sunton ESP32-S3 (240 MHz, 800×480 panel, SD over SPI) while the station was
 44,100 Hz / 256 kbps (`components/app/appliance/appliance.c:205-206`) and a client was attached —

@@ -27,8 +27,9 @@ A spec and a research document open with one line:
 - `superseded` — replaced by another document, which the header names.
 - `obsolete` — no longer true, and nothing replaces it.
 
-A research document carries `**Status:** research` and the date it was taken. Its conclusion is
-its last section; the document is evidence from a moment, and a later ADR or spec outranks it.
+A research document opens with `**Status:** research`, the date it was taken, and
+`**Conclusion:**` — one sentence, the document's own verdict, so the note is not mistaken for
+current truth. A note that reaches no verdict carries no conclusion line.
 
 ADRs carry no status. Being accepted is what makes one an ADR, and a newer ADR supersedes an
 older one by naming it. Tickets under `design/` carry no status either: the board in

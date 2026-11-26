@@ -1,6 +1,7 @@
 # Why the 800x480 RGB panel reports 15 FPS, and which lever moves it — verified from primary sources (2026-10-17)
 
 **Status:** research · **Updated:** 2026-10-18
+**Conclusion:** 15 FPS is a refresh-cycle count capped at 30, not render speed; the 62.5–66.7 ms cycle points to preemption.
 
 Axis: **the board draws an 800x480 RGB565 panel through `esp_lvgl_port` in direct mode with
 `avoid_tearing`, and LVGL's own performance monitor reports 15 FPS. This note establishes what that

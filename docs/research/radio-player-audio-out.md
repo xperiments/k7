@@ -1,6 +1,7 @@
 # Internet-radio player on ESP32-S3 — audio output & concurrency architecture
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** Fix the output rate and resample the stream (Option A), the recommended default over reclocking I2S per stream.
 
 Axis: **getting decoded PCM out of the chip reliably**, plus the task/buffering structure around it.
 Target: an ESP-IDF v5.x component reusable by other projects.

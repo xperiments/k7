@@ -1,6 +1,7 @@
 # K7: a global campaign — what to do, and what to refuse
 
 **Status:** research · **Updated:** 2026-11-03
+**Conclusion:** Do not launch a product campaign: make the object wanted through a twelve-week, two-sided tape, with a build list as the only conversion.
 
 Researched 2026-11-03 against two kinds of primary source: **this repository** (the product's
 own specifications, ADRs and measured board status) and **the platforms' own documentation**

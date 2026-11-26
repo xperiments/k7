@@ -1,6 +1,7 @@
 # Transport layer: locally verified findings (executed, not recalled)
 
 **Status:** research · **Updated:** 2026-10-16
+**Conclusion:** esp_http_client does support SHOUTcast/ICY — the common contrary claim is false — so no raw-socket client is needed, and IDF ≥5.4 is a credible floor.
 
 This file records findings established by **running code on this machine**, because
 they are the load-bearing claims for the library's transport design and they are
