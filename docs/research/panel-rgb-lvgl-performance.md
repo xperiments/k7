@@ -1,5 +1,7 @@
 # Why the 800x480 RGB panel reports 15 FPS, and which lever moves it — verified from primary sources (2026-10-17)
 
+**Status:** research · **Updated:** 2026-10-18
+
 Axis: **the board draws an 800x480 RGB565 panel through `esp_lvgl_port` in direct mode with
 `avoid_tearing`, and LVGL's own performance monitor reports 15 FPS. This note establishes what that
 number counts, where a frame's time actually goes, and which of the candidate levers can change it —

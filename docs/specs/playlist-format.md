@@ -1,5 +1,7 @@
 # Playlist format
 
+**Status:** accepted · **Updated:** 2026-11-16
+
 A **Playlist** is one file on the card, at `k7.playlists/<id>.k7list`. It is written by the app
 when the card is in a computer, and by the device when the card is in the player
 ([ADR 0094](../adr/0094-the-device-writes-the-lists-it-is-given.md)); nothing else writes it

@@ -27,8 +27,8 @@ A spec and a research document open with one line:
 - `superseded` — replaced by another document, which the header names.
 - `obsolete` — no longer true, and nothing replaces it.
 
-A research document carries `**Status:** research` with its date and conclusion: it is evidence
-from a moment, and a later ADR or spec outranks it.
+A research document carries `**Status:** research` and the date it was taken. Its conclusion is
+its last section; the document is evidence from a moment, and a later ADR or spec outranks it.
 
 ADRs carry no status. Being accepted is what makes one an ADR, and a newer ADR supersedes an
 older one by naming it. Tickets under `design/` carry no status either: the board in

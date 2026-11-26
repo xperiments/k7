@@ -1,5 +1,7 @@
 # The cover archive
 
+**Status:** accepted · **Updated:** 2026-11-21
+
 `k7.covers` at the card's root is the **browser's cover cache, carried on the card**. The App
 writes it when a scan settles, and reads it back when the card is opened again. It is not the
 device's artwork: the panel still reads a Track's own picture from the audio file. It exists so

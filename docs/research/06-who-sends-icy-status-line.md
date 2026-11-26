@@ -1,5 +1,7 @@
 # Who actually sends `ICY 200 OK`? (Icecast + SHOUTcast source read, 2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 An important refinement to the transport design: the fact that `esp_http_client`'s parser
 understands `ICY 200 OK` does **not** mean modern Icecast emits it. Reading the Icecast
 server source settles which side of the wire the ICY status line comes from, and therefore

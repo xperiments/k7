@@ -1,5 +1,7 @@
 # Live-stream observations (captured from real stations, 2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 Complements `03-transport-verified-locally.md` (parser/algorithm behaviour) with what
 actual internet-radio endpoints do on the wire. Commands were run from this machine;
 raw bytes were inspected rather than assumed. Reproduce with the `curl` lines shown —

@@ -1,5 +1,7 @@
 # Stream server
 
+**Status:** accepted · **Updated:** 2026-11-26
+
 An ESP32-S3 that owns a music library on a microSD card and broadcasts it over HTTP. This
 context covers the **origin** side: the device that produces a stream. The consumer side is a
 separate context — see [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md).

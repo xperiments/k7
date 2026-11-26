@@ -1,5 +1,7 @@
 # A full-screen Real cassette: the mask's size, the two-finger swipe, and what the tape really costs per frame (2026-11-05)
 
+**Status:** research · **Updated:** 2026-11-05
+
 > **Status: the porthole (§4e) was built, flashed and lost (§4.1); it is kept behind
 > `CARD_MASK 0` and off. The full-screen layout and the two-finger gesture are implemented on
 > `ui/full-screen-real` on the mask design, and the firmware was flashed on 2026-11-05

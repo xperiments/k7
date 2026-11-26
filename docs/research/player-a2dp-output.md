@@ -1,5 +1,7 @@
 # Bluetooth A2DP as the K7Player's output: the feasibility box
 
+**Status:** research · **Updated:** 2026-11-19
+
 **The question.** A classic ESP32 (ESP32-D0WD, WROOM-32: 4 MB flash, 520 KB SRAM, no PSRAM) receives
 a 128 kbps MP3 stream over ESP-NOW and plays it on an I2S line (PCM5102A). Could the same board
 instead — or as well — be the **A2DP source** for a Bluetooth speaker (SBC encode, send)? As a

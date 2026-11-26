@@ -1,6 +1,8 @@
 # BPM, key, mood and energy for a webapp that ingests MP3 and FLAC
 
-**Status:** research only; no source changed. Written 2026-10-20 on the `xtape` checkout
+**Status:** research · **Updated:** 2026-10-21
+
+**Scope:** research only; no source changed. Written 2026-10-20 on the `xtape` checkout
 (`abcb8f7` plus untracked working-tree files). All timings were taken on this machine: Apple
 M2 Max, 12 cores (8P + 4E), 32 GB, macOS 26.3.1, Node 24.18.0, ffmpeg 9.0.2 (Homebrew),
 Python 3.12.13 for the native reference measurements.

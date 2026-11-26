@@ -1,5 +1,7 @@
 # Internal RAM on the ESP32-S3 stream server, and what an LVGL UI costs — verified from primary sources (2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-18
+
 Axis: **where this firmware's internal RAM actually goes, which levers can free some of it, and what adding an LVGL UI does to a board that already spends ~100 KB of internal RAM on an MP3 encoder.**
 
 Everything below is read out of artefacts on this machine: the ESP-IDF trees at

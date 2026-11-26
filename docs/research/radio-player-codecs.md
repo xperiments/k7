@@ -1,5 +1,7 @@
 # Codec / decode layer for an ESP32‑S3 internet‑radio **player** component
 
+**Status:** research · **Updated:** 2026-10-16
+
 Axis: *which formats must be decoded, with which library, at what cost.*
 All sources fetched **2026‑10‑16** (host clock). Companions: `00-audit-of-resources.md`
 (what `resources/` is), `02-packaging-and-licensing.md` (registry/licensing rules),

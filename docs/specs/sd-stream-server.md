@@ -1,5 +1,7 @@
 # SD stream server: specification
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 **Goal.** An ESP32-S3 devkit, flashed with this firmware, joins Wi-Fi, reads an audio library off
 a microSD card, and broadcasts it over HTTP: one continuous live MP3 stream plus an index that
 lists the library. Which network it joins is chosen on its own setup network — never compiled in

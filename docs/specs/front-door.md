@@ -1,5 +1,7 @@
 # The front door: one shell, four areas
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 > **The page half of this document is retired** by
 > [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md): the device serves no page and
 > packs no Shell, and `/`, `/index.html`, `/bridge` and `/app` now answer 302 to the App at
@@ -28,7 +30,7 @@ vocabulary is [`web/CONTEXT.md`](../../web/CONTEXT.md); the device's is
 [`CONTEXT.md`](./CONTEXT.md). The byte contract for the image is
 [`snapshot-format.md`](./snapshot-format.md).
 
-**Status:** built, flashed and running on the board over plain HTTP — the Shell (377 KiB packed),
+**State:** built, flashed and running on the board over plain HTTP — the Shell (377 KiB packed),
 the four areas, the hash routes, the Snapshot's list area, `GET /api/playlists`,
 `GET /api/playlists/<id>`, `POST /api/playlists/select`, the selection remembered in NVS, and the
 broadcast walking a selected order. The page is served and its assets download from the device.

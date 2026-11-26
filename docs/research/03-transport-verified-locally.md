@@ -1,5 +1,7 @@
 # Transport layer: locally verified findings (executed, not recalled)
 
+**Status:** research · **Updated:** 2026-10-16
+
 This file records findings established by **running code on this machine**, because
 they are the load-bearing claims for the library's transport design and they are
 repeatedly reported incorrectly in secondary sources. Everything here was verified

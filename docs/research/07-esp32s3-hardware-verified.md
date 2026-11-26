@@ -1,5 +1,7 @@
 # ESP32-S3 hardware facts, verified from primary sources (2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 Checked against the ESP-IDF tree installed at `~/.espressif/v5.4.2/esp-idf` and the
 corresponding upstream headers, rather than from memory. These constants gate the
 library's memory budget and rule out one entire class of audio output.

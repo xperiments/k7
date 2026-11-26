@@ -1,5 +1,7 @@
 # The Menu
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 The Menu is the screen's way into everything that is not the cassette: the Library tree, the card's
 Playlists, the shuffle mode and the settings. It is a **mode of the Controls**, not a Level or
 a screen: the cassette area becomes a five-row list, the right bar's group gives way to the

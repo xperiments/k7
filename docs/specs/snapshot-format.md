@@ -1,5 +1,7 @@
 # Snapshot format
 
+**Status:** accepted · **Updated:** 2026-11-16
+
 The byte layout of a **Snapshot** — the file the host writes to the card as `k7.db` and the
 device flashes into its `snapshot` partition. Two implementations must agree on every byte: the
 browser producer (`web/`) and the firmware reader (`components/portable/snapshot/`). The

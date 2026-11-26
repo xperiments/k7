@@ -1,5 +1,7 @@
 # The card's mark
 
+**Status:** accepted · **Updated:** 2026-11-12
+
 **Goal.** A card can be recognised across sessions without reading every file on it. The mark
 is a small file the **App** writes at a card's root; it names the card, so the browser's
 card-level state — covers, the Last image, a run in progress — belongs to one card and not to
@@ -10,7 +12,7 @@ copy it, edit it, or `dd` it onto a second card. The mark answers *"is this the 
 prepared?"* and never *"is this card allowed to do this?"* — the second question has no answer
 on this device, which has no authentication at all.
 
-**Status:** the mark, the policy, the fingerprint and the scoped stores are built and tested.
+**State:** the mark, the policy, the fingerprint and the scoped stores are built and tested.
 The device reads the mark at mount and reports its id in `/api/status` (`mark`); §7's
 Update-file shim is in the firmware.
 

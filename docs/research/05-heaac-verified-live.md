@@ -1,5 +1,7 @@
 # HE-AAC verified from a live stream (2026-10-16)
 
+**Status:** research · **Updated:** 2026-10-16
+
 The codec recommendation rests on a mechanism claim that is easy to state and rarely
 demonstrated: **HE-AAC streams advertise themselves as plain AAC-LC in their framing, and
 only the decoder can recover the doubled sample rate.** This was checked against real

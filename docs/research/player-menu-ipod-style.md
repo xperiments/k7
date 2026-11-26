@@ -1,5 +1,7 @@
 # An iPod-style menu for xtape: what the iPod actually does, and how to put it on a touch-only 800x480 panel — verified from primary sources (2026-10-22)
 
+**Status:** research · **Updated:** 2026-10-26
+
 Axis: **the owner wants an "iPod-style menu" on a device that has no wheel — an 800x480 RGB565
 panel, a GT911 pointer polled every 10 ms, one BOOT button, and a screen whose only input language
 today is tap/swipe on the cassette. This note establishes what the iPod menu is from Apple's own user

@@ -1,5 +1,7 @@
 # The hub: 36 blitted frames or LVGL-drawn primitives — what the space really is, and what the draw costs (2026-10-23)
 
+**Status:** research · **Updated:** 2026-10-23
+
 > **Status: implemented.** Branch `ui/drawn-hub` replaces the blob with the drawn hub that
 > §5 prices: a static rim and two opposite radii (r 26…46 as tuned at the time of writing),
 > turning as two objects. The dot §6 argues for was built and then dropped as unneeded.

@@ -1,5 +1,7 @@
 # The strip
 
+**Status:** accepted · **Updated:** 2026-11-10
+
 The addressable light of the device: eight WS2812B pixels that show the **RGB group**'s state.
 The state, the effects and the frame arithmetic are portable and pinned on the host; this
 document is the board-only half - the count, the pin, the supply, the cadence, and where the

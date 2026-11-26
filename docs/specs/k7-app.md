@@ -1,5 +1,7 @@
 # K7: a secure application that reaches the player directly
 
+**Status:** accepted · **Updated:** 2026-11-20
+
 **Goal.** K7 is the App at `/app` on one secure origin — **installable from Chrome in one click
 as an app**, offline-capable, and useful with no player in the room. The origin's root is the
 **Site**, which offers the App's install and flashes the player's firmware
@@ -14,7 +16,7 @@ gateway, not the runtime.
 The page the device used to serve is gone: **Front door**, **Launcher**, **Device copy**,
 **Shell** and **Bridge** are retired words.
 
-**Status:** M1–M3 are built and tested in this repository — the card's mark and the scoped
+**State:** M1–M3 are built and tested in this repository — the card's mark and the scoped
 stores, installability, and the one offline weights store with a gated prefetch. The App is
 deployed at `/app` on the origin ([`k7-deploy.md`](./k7-deploy.md) records what it answers), and
 the device serves no page of it, so there is nothing of it to flash (ADR 0067). The `/app` split

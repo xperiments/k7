@@ -1,5 +1,7 @@
 # K7Art packs: the file, the App and the K7's art
 
+**Status:** accepted · **Updated:** 2026-11-26
+
 A **K7Art pack** is a user's set of K7Art designs, published from the editor and installed on
 the K7. The K7 shows its labels in the two-finger rotation and the App draws its J-cards on the
 albums that have no picture. One pack is active at a time and it is **additive**: the factory

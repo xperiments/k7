@@ -1,5 +1,7 @@
 # The network handover: a K7 gives a K7Player a network over ESP-NOW
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 **Goal.** A K7Player with no credentials is given the network its K7 is on, by the K7, without
 anyone typing anything and without the household's password going over the air in clear. The K7
 does it inside a window a person opens, for one player, and forgets the whole thing afterwards.
@@ -11,7 +13,7 @@ two glossaries: **handover**, **share window**, **sweep**, **beacon**, **network
 [`player/CONTEXT.md`](../../player/CONTEXT.md), and the network vocabulary the K7 already owns in
 [`CONTEXT.md`](./CONTEXT.md#the-network).
 
-**Status:** built, and proven over the air on **2026-11-18** (§7): a window opened on the K7, a
+**State:** built, and proven over the air on **2026-11-18** (§7): a window opened on the K7, a
 player whose record had been erased swept, asked, and stored the record, and it then joined the
 home network and played. What the same run did not close: the AP fallback (T14), a sweep that has
 to walk every channel (T12 — the K7 was on channel 1), and the window closing on its own (T16).

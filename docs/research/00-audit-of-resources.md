@@ -1,5 +1,7 @@
 # Audit: is `resources/` a minimal source for an ESP32-S3 radio stream **player**?
 
+**Status:** research · **Updated:** 2026-10-16
+
 Scope: the 10 files in `resources/` (892 lines of C/H total), read in full. This is the
 hand-written reconnaissance for the xtape radio-player library research; the three
 topic files beside it (`radio-player-streaming.md`, `radio-player-codecs.md`,

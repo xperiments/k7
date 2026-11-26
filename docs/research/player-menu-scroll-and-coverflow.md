@@ -1,5 +1,7 @@
 # Cover Flow and one-row finger scrolling on xtape — verified against the vendored LVGL 9.6 and Apple's own documents (2026-10-23)
 
+**Status:** research · **Updated:** 2026-10-26
+
 Axis: **the owner has chosen touch (no drawn wheel) and wants a normal finger drag whose content
 advances only in blocks of one row; he also doubts that Cover Flow is viable. This note answers both
 questions from primary sources: what Cover Flow is and needs, what LVGL 9.6 can actually do on this

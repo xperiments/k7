@@ -1,6 +1,8 @@
 # How to test what Ask understands, and what Chrome lets us change
 
-**Status:** research only; no source changed and no model run. Written 2026-11-14 against
+**Status:** research · **Updated:** 2026-11-15
+
+**Scope:** research only; no source changed and no model run. Written 2026-11-14 against
 `646ca76`; the working tree also carries another lane's uncommitted Snapshot, image-source and
 player files, which this note did not inspect. Every external URL was read on 2026-11-14. Labels:
 **VERIFIED** = read in the cited primary source (Chrome's own docs, Chromium source at a named

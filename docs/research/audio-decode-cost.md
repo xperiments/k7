@@ -1,5 +1,7 @@
 # What a 24-bit / 192 kHz FLAC costs this board
 
+**Status:** research · **Updated:** 2026-10-29
+
 Measured on the Sunton ESP32-S3 (240 MHz, 8 MB octal PSRAM, SD over 20 MHz SPI,
 1-bit) while the station was 44,100 Hz / 256 kbps and one client was attached.
 The Track is `01 - I Surrender.flac`: 24-bit / 192 kHz stereo, 173 MB, 244.6 s,

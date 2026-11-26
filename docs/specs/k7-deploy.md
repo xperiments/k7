@@ -1,5 +1,7 @@
 # Deploying K7
 
+**Status:** accepted · **Updated:** 2026-11-21
+
 **Goal.** One artifact from one repository, three documents at `https://k7.xperiments.dev`: the
 **Site** at `/`, the **App** at `/app` ([`k7-site.md`](./k7-site.md)), and the **K7Art Editor** at
 `/k7art` ([ADR 0112](../adr/0112-the-k7art-editor-is-the-sites-k7art-page.md)). The device serves
@@ -11,7 +13,7 @@ shape it ships in — real TLS, no warning, a genuine secure context. It has one
 exception: the origin is on the LAN, so Chrome's `local-network` permission never gates it, and
 its build mounts without the gate (§4 D12; [ADR 0082](../adr/0082-the-development-origin-is-trusted-by-a-development-build.md)).
 
-**Status:** deployed. `https://k7.xperiments.dev/` serves the Site and `/app` the App, on Vercel
+**State:** deployed. `https://k7.xperiments.dev/` serves the Site and `/app` the App, on Vercel
 with its certificate, and the Site serves the released 0.6.2 parts for both boards. §7 records
 what the origin answered when it was checked, and when. Not proven: A13's installability has not
 been re-signed on the real origin, and no board has been flashed from the browser

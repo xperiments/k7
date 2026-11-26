@@ -1,5 +1,7 @@
 # The Snapshot: measured music in PSRAM
 
+**Status:** accepted · **Updated:** 2026-11-16
+
 **Goal.** A host measures a Library — tempo, key, energy, danceability, valence, arousal, mood,
 names, genre — and writes the result to the card as one file. The device flashes that file into
 its `snapshot` partition at boot, copies the image into PSRAM before the panel's first clock,

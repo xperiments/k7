@@ -1,5 +1,7 @@
 # The Site: the product page, the flash, and the install
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 **Goal.** `https://k7.xperiments.dev/` is the **Site**: one public page that says what K7 is,
 flashes the player's firmware from a browser, and installs the App. The App itself moves to
 `/app` and is otherwise unchanged, behind its gate. The Site is the only place a person with no
@@ -13,7 +15,7 @@ The origin does not move: `xperiments.dev` and its certificate are the ones alre
 the root ([ADR 0078](../adr/0078-the-site-owns-the-root-and-the-app-moves-to-app.md)) and how the
 firmware reaches a board ([ADR 0079](../adr/0079-the-firmware-is-flashed-in-parts-from-the-browser.md)).
 
-**Status:** S1–S14, R1–R6, D1–D4 and F1–F13 are built; **K7 0.6.2 and K7Player 0.6.2 are
+**State:** S1–S14, R1–R6, D1–D4 and F1–F13 are built; **K7 0.6.2 and K7Player 0.6.2 are
 released** — `web/firmware.json` and `web/firmware-player.json`, with their parts under
 `web/public/firmware/` and `web/public/firmware/player/`. The flash's rules are tested over a
 fake board and a fake origin — **not on hardware** — and **no board has been flashed from a

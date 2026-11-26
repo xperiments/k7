@@ -1,5 +1,7 @@
 # Wi-Fi provisioning: the setup network, the page, and the join
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 **Goal.** A device with no network is not a dead device. It raises its own access point, named
 **`K7.local`**, serves one page at `http://192.168.4.1/setup`, and takes a **home network** and its
 password from a person standing in front of it. The network is chosen once and stored; it is never
@@ -11,7 +13,7 @@ listener and its access model, so [`front-door.md`](./front-door.md) and
 [`sd-stream-server.md`](./sd-stream-server.md) are amended where they claimed the device had no
 page and no runtime credentials.
 
-**Status:** built, and proven on the board on **2026-11-10** (§10): an unprovisioned device raises
+**State:** built, and proven on the board on **2026-11-10** (§10): an unprovisioned device raises
 `K7.local`, `/setup` answers from a machine joined to it, a wrong password is reported with its
 reason, a good one joins and the hotspot closes itself, the record survives a flash, B5's
 eight-minute soak held, and the access point fits (§9, P40). What is not proven: the page fetched

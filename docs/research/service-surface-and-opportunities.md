@@ -1,6 +1,8 @@
 # What the appliance serves today, and what those services could be sold for
 
-**Status:** research only; no source changed. Written 2026-10-30 against `12c83c5` plus the
+**Status:** research · **Updated:** 2026-11-25
+
+**Scope:** research only; no source changed. Written 2026-10-30 against `12c83c5` plus the
 working-tree UI changes.
 
 > **Amended 2026-10-31.** The `/music/<rel>` download row in Part A is gone: the global

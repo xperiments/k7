@@ -1,6 +1,8 @@
 # Which network music sources are worth supporting
 
-**Status:** research only; no source changed. Written 2026-11-14 against `649bcdd` (plus
+**Status:** research · **Updated:** 2026-11-20
+
+**Scope:** research only; no source changed. Written 2026-11-14 against `649bcdd` (plus
 untracked working-tree files); another lane committed `2399003` while it was being written. Every
 external URL was read on 2026-11-14 unless a different date is named. Labels: **VERIFIED** = read in the cited primary source (vendor docs, source
 code at a named tag, a spec); **REPORTED** = a credible third party's observation, not the

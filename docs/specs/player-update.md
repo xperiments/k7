@@ -1,5 +1,7 @@
 # The player's update
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 How a K7Player's firmware is replaced over the air, from the image a K7 carries to the frame the
 new image proves itself with: [ADR 0116](../adr/0116-a-players-firmware-is-a-signed-image-the-k7-carries.md)
 for the signed image and [ADR 0117](../adr/0117-a-players-update-is-a-persons-act.md) for the act.

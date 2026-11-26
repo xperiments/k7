@@ -1,5 +1,7 @@
 # Label templates
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 The cassette's **label** is the design the two-finger screen prints on the Card's print: the
 `label` section of a **K7Art** ([`k7art.md`](./k7art.md)), authored in the **K7Art Editor**
 (`tools/LabelEditor/`, served at `/k7art`), packed at build into the factory **Label sheet**,

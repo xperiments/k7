@@ -1,5 +1,7 @@
 # Packaging & licensing constraints (verified against sources, not recalled)
 
+**Status:** research · **Updated:** 2026-10-16
+
 These are facts that gate the library's *shape* and its *legal ability to be depended
 on*. Each was checked directly against the registry or the upstream repository on
 **2026-10-16**, because both facts here are the kind that are commonly misremembered.

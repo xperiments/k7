@@ -1,5 +1,7 @@
 # xtape: a reusable ESP32-S3 internet-radio player component — architecture
 
+**Status:** research · **Updated:** 2026-10-16
+
 This is the synthesis document. It turns the reconnaissance and research beside it into a
 concrete component design, and it states plainly what is proven, what is inferred, and
 what remains unmeasured.

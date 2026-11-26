@@ -1,6 +1,8 @@
 # Can the K7 and the K7Player live in Home Assistant?
 
-**Status:** research only; no source changed. Written 2026-11-24 against `7aaa72a` (the working tree
+**Status:** research · **Updated:** 2026-11-25
+
+**Scope:** research only; no source changed. Written 2026-11-24 against `7aaa72a` (the working tree
 also carries other sessions' edits, which this note does not read as evidence).
 
 **The question:** how can this pair of boards be used from Home Assistant, or an architecture like

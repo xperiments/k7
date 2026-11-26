@@ -1,5 +1,7 @@
 # K7Player: the second device
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 **Goal.** A box that is switched on, finds the K7, and plays what the K7 is broadcasting down a wire into an
 amplifier. It is a **Client** of the live stream and
 nothing else, so it has no card, no library, no Snapshot, no transport and no volume; the one
@@ -11,7 +13,7 @@ The decisions are [ADR 0097](../adr/0097-the-player-is-an-esp32-classic-in-its-o
 (the handover). The words are [`player/CONTEXT.md`](../../player/CONTEXT.md); the protocol's own
 document is [`network-handover.md`](./network-handover.md).
 
-**Status:** built, and measured on the board on **2026-11-18** (§6): the line output making sound
+**State:** built, and measured on the board on **2026-11-18** (§6): the line output making sound
 at 44.1 kHz, the ESP-NOW receiver with the ring at 70/96 KB and nothing refused or underrun, and
 the memory census with the stream, decoder and ring up. The board is ADR 0097's — a WROOM-32 with
 a PCM5102A — and the image is 891 KB with 15 % of its 1 MB partition free. The handover is not

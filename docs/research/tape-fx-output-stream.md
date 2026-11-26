@@ -1,5 +1,7 @@
 # Tape FX on the output stream
 
+**Status:** research · **Updated:** 2026-11-05
+
 > **Retired.** This effect was built, measured and then removed from the product at the
 > owner's request: it ran on the stream, but its character was too subtle to be worth the
 > remaining headroom, and the settings never earned a place in the interface. What is below is

@@ -1,5 +1,7 @@
 # The tone on the player: where the K7's EQ should run when the radio carries the audio
 
+**Status:** research · **Updated:** 2026-11-20
+
 **The question.** The K7's one audio effect is the DJ tone — GAIN, HI, MID and LOW on the right
 bar. Today it runs on the S3, on the PCM chunk the encoder is about to take. When the K7's
 transport for the player is ESP-NOW, should the player apply it instead, with the K7 sending the

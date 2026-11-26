@@ -1,5 +1,7 @@
 # Virtual local SD cards in the browser
 
+**Status:** research · **Updated:** 2026-11-12
+
 Can the K7 app let a person compose a "virtual SD card" — a card-shaped tree of a chosen
 capacity into which they drag folders of music, measure the files, and keep `k7.db` + the card
 mark + `k7.covers` up to date — to be written onto a real SD later? This note reads the primary

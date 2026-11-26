@@ -1,5 +1,7 @@
 # The ESP-NOW audio stream
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 The player's audio path when the K7 emits it over ESP-NOW instead of HTTP:
 [ADR 0103](../adr/0103-the-players-audio-arrives-over-esp-now.md). The ring, the prime, the
 playout and the light are unchanged and are `k7player.md` R26–R28's; this document is only the

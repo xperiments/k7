@@ -1,5 +1,7 @@
 # The Card
 
+**Status:** accepted · **Updated:** 2026-11-09
+
 On the white page - the **Real** Level - the cassette is a **Card**: one tinted rounded
 rectangle at 426x272, the Track's picture (the **Cover**) or a drawn **label** printed on it at
 +12,+20, and the tape visible through a 291x87 pill window the two share. It is the white page's

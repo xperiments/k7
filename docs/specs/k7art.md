@@ -1,5 +1,7 @@
 # K7Art: one design, a label and a J-card
 
+**Status:** accepted · **Updated:** 2026-11-25
+
 A **K7Art** is one cassette artwork: the label the K7 prints on the Card at the two-finger
 pose, and the J-card the cassette case is sleeved with - one file, one id, two sections. It is
 authored in the **K7Art Editor** (`tools/LabelEditor/`, served at `/k7art`) and read by two

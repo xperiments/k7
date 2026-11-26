@@ -1,5 +1,7 @@
 # The bridge: typed operations between the App and the Launcher
 
+**Status:** accepted · **Updated:** 2026-11-16
+
 > **Retired by [ADR 0067](../adr/0067-chrome-only-direct-to-the-device.md).** There is no
 > Launcher and no bridge: the App reaches `http://k7.local` directly once the `local-network`
 > permission is granted. The operation table survives as `OP_SPECS` in
@@ -19,7 +21,7 @@ own API. The bridge is how the App asks it to.
 It is a request/response RPC with a closed operation table. It is not a proxy, not a tunnel,
 and not a stream.
 
-**Status:** built on both ends and tested (the protocol module, the Launcher's executor, the
+**State:** built on both ends and tested (the protocol module, the Launcher's executor, the
 App's client, and a contract test that transcribes §3 by hand). Not yet exercised in a browser
 across two real origins — that Playwright suite is the one item of §9 outstanding.
 

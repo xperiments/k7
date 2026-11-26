@@ -1,5 +1,7 @@
 # The K7 look: one near-black page, a primary and a secondary, line art
 
+**Status:** accepted · **Updated:** 2026-11-26
+
 **Goal.** The App at `/app` and the Site at `/` are one instrument drawn as a technical
 schematic: a thin line on near-black, an orange primary and a neutral ink, outline for what is
 available and fill for what is current. The look is carried by the theme tokens and the installed
@@ -8,7 +10,7 @@ primitives, so a screen is not restyled one by one; and it is one look for both 
 setup at `/setup`, carries the same palette by hand in its inline stylesheet
 (`components/portable/setup/setup_http.c`) — it has no stylesheet to share.
 
-**Status.** Built: the tokens (LK-02), the shell (LK-03), the screens (LK-04, LK-05) and the Site
+**State.** Built: the tokens (LK-02), the shell (LK-03), the screens (LK-04, LK-05) and the Site
 (LK-06); the palette was split into a primary and a secondary by ADR 0081, and the setup page
 follows by hand. LK-07 is the verification. The calls this repository took against the guide that
 preceded this file are recorded in [ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md)
