@@ -8,8 +8,9 @@ Several sessions share one tree, and git will not warn when two edit the same fi
   global premise is refused, not negotiated. A decision the specs cannot settle is an ADR
   in `docs/adr/`, landed in the same change — copy an existing one's shape. The README is
   the manual; a spec never restates it.
-- **Read the map, then the sections.** `CONTEXT-MAP.md`, then the `CONTEXT.md` sections
-  that name the terms you are using, then the spec. They are glossaries, not chapters.
+- **Read the map, then the sections.** `CONTEXT-MAP.md`, then `docs/README.md` for which
+  folder owns what, then the `CONTEXT.md` sections that name the terms you are using, then the
+  spec. They are glossaries, not chapters.
 - **One file, one writer.** Take a write scope and ask before widening it. Readers run in
   parallel; writers serialise.
 - **A subagent never runs git.** It returns its diff; the branch's owner commits explicit
