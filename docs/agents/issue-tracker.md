@@ -1,5 +1,8 @@
 # Issue tracker: Local Markdown
 
+**Tracker type:** local markdown tickets under `docs/design/<feature>/issues/`, with state on
+the Kanvas board (`kanvas.json`). Not GitHub Issues. Where the two disagree, the board wins.
+
 Issues and specs for this repo live as tracked markdown files under `docs/design/`. There is no
 hosted tracker. **The board is the tracker**: `kanvas.json`, driven by
 `python3 .agents/skills/kanvas/kanvas.py`, holds each task's state, its dependencies and its

@@ -35,3 +35,20 @@ Several sessions share one tree, and git will not warn when two edit the same fi
   searching; ask before the top tier.
 - One task per session. Close with what changed, how it was verified, and every claim
   labelled measured, inferred or guessed.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as markdown under `docs/design/<feature>/issues/`, and their state on the Kanvas
+board. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five triage roles are carried by the board's states and notes; this repo has no label
+field. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` at the root, one `CONTEXT.md` per context, decisions in
+`docs/adr/`. See `docs/agents/domain.md`.
