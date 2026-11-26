@@ -1,5 +1,5 @@
 /*
- * The Cassette screen's design grid, without LVGL.
+ * The Screen's design grid, without LVGL.
  *
  * The view used to convert design coordinates through a file-static pose and three
  * macros. This pins the conversion - the identity grid, the centring at a smaller

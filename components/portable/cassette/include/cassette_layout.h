@@ -1,6 +1,6 @@
 #pragma once
 /*
- * cassette_layout - the design grid the Cassette screen is drawn on, as a value.
+ * cassette_layout - the design grid the Screen is drawn on, as a value.
  *
  * The screen's layout is written on the 800x480 grid of the Label cover. A pose
  * scales that grid (256 = LV_SCALE_NONE, pixel for pixel), centres the scaled box

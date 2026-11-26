@@ -1,6 +1,6 @@
 #pragma once
 /*
- * The Cassette screen's palette, read off the reference, as 0xRRGGBB.
+ * The Screen's palette, read off the reference, as 0xRRGGBB.
  *
  * lv_color_hex() is a function (lv_color.h:283), so it cannot initialise a constant.
  * COL_HEX() is the same split done at compile time on top of LVGL's own aggregate

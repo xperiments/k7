@@ -1,5 +1,5 @@
 /*
- * controls - the Cassette screen's Controls model, portable: the level ladder, the Page, the
+ * controls - the Screen's Controls model, portable: the level ladder, the Page, the
  * Cover, the one-overlay rule and the Menu. No LVGL, no clock, no collaborators (controls.h).
  *
  * One step is (state, intent, facts) -> the groups that changed. The rules are ADR 0025's

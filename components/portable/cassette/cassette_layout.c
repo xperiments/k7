@@ -1,5 +1,5 @@
 /*
- * The Cassette screen's design grid, as arithmetic. No LVGL, no globals: the view
+ * The Screen's design grid, as arithmetic. No LVGL, no globals: the view
  * passes its current pose in, so every part of the screen lays out from one value
  * instead of reading a file-static through macros. See cassette_layout.h.
  */

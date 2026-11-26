@@ -1,5 +1,5 @@
 /*
- * The Cassette screen's palette. One definition per colour; see cassette_style.h.
+ * The Screen's palette. One definition per colour; see cassette_style.h.
  */
 #include "cassette_style.h"
 

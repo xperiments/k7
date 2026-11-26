@@ -1,5 +1,5 @@
 /*
- * cassette_levels.c - the peek and Real's cover, hosted on the Cassette screen.
+ * cassette_levels.c - the peek and Real's cover, hosted on the Screen.
  *
  * The peek is the bottom rung of the four (ADR 0025): the up swipe at Initial raises it
  * (the view does that only from the entry 100% pose) and the down swipe puts it away. The

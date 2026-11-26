@@ -1,6 +1,6 @@
 #pragma once
 /*
- * cassette_levels - the peek and Real's cover, hosted on the Cassette screen.
+ * cassette_levels - the peek and Real's cover, hosted on the Screen.
  *
  * The peek is the bottom rung of the four (ADR 0025): an up swipe at Initial raises it and
  * a down swipe puts it away, cassette_peek's timeline bar and two tags. Real's picture is

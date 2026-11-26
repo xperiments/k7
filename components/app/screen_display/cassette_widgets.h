@@ -1,6 +1,6 @@
 #pragma once
 /*
- * The LVGL object helpers every part of the Cassette screen builds with.
+ * The LVGL object helpers every part of the Screen builds with.
  *
  * They remove the widget's own style, put it at a position and size, and leave it
  * decorative: a press must reach the screen's gesture handler, not a painted box.

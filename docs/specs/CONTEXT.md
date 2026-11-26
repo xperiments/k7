@@ -220,13 +220,13 @@ _Avoid_: current song, stream title, ID3 title
 
 **Screen display**:
 The module that brings up the panel (or the headless framebuffer), owns LVGL's memory
-and hosts the **Cassette screen**. It reads the **live stream**'s status; it is never a
+and hosts the **Screen**. It reads the **live stream**'s status; it is never a
 source of truth.
 _Avoid_: UI, GUI
 
-**Cassette screen**:
-The 800x480 screen the **Cassette** sits in, showing what is playing: two reels, two tape packs,
-a label and a **VU meter**. A presentation of the live stream, never a source of
+**Screen**:
+The 800x480 presentation the **Cassette** sits in, showing what is playing: two reels, two tape
+packs, a label and a **VU meter**. A presentation of the live stream, never a source of
 truth.
 _Avoid_: UI, GUI, dashboard
 

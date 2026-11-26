@@ -1,6 +1,6 @@
 #pragma once
 /*
- * controls - the Cassette screen's Controls as a value: the Level the screen is showing,
+ * controls - the Screen's Controls as a value: the Level the screen is showing,
  * and whether the Menu is open.
  *
  * The model owns the ladder (ADR 0025), the Page rule, the one-overlay rule, the Cover's

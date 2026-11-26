@@ -1,6 +1,6 @@
 #pragma once
 /*
- * pad - the Cassette screen's Pad: what one press means. Portable: no LVGL, no Menu, no
+ * pad - the Screen's Pad: what one press means. Portable: no LVGL, no Menu, no
  * card, no board, no allocation (docs/specs/menu.md, ADR 0022).
  *
  * The Pad is one plate over the DJ block's place. The plate, its rect, its ink and its

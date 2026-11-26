@@ -1,5 +1,5 @@
 /*
- * The Cassette screen's object helpers; see cassette_widgets.h.
+ * The Screen's object helpers; see cassette_widgets.h.
  */
 #include "cassette_widgets.h"
 
