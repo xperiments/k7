@@ -48,3 +48,6 @@ resources/*.psd
 
 # The ReUI agent skill is installed by its own installer and updated there, not vendored.
 .agents/
+
+# The screen catalogue is regenerated with `npm run screens`; the captures are not checked in.
+docs/images/

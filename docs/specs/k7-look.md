@@ -14,9 +14,9 @@ follows by hand. LK-07 is the verification. The calls this repository took again
 preceded this file are recorded in [ADR 0080](../adr/0080-the-k7-look-is-the-products-one-skin.md)
 and [ADR 0081](../adr/0081-the-look-has-a-primary-and-a-secondary.md), and marked **[ADR]** below.
 
-**Reference.** The ten scene drawings in [`docs/images/screens/`](../images/screens/), all of them
-in [`contact-sheet.png`](../images/screens/contact-sheet.png): scenes 0–4 and 6–8 are the K7 look;
-scenes 5 and 9 are the grey "Real" takes and are not. The sheet is a device drawing, so its rail,
+**Reference.** The ten scene drawings and their contact sheet — regenerated into
+`docs/images/screens/` by `npm run screens` (README, *Reproducing the board tier*) and not checked
+in: scenes 0–4 and 6–8 are the K7 look; scenes 5 and 9 are the grey "Real" takes and are not. The sheet is a device drawing, so its rail,
 knobs and meters are the kit §5 says this App does not build; the ink, the frame, the filled logo
 tile, the footer pill and the filled rows are what carry over.
 

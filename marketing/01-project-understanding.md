@@ -267,8 +267,9 @@ system that was measured into existence**, and the measurements are the content.
 - **No sound in the room.** The pitch "turns a room into a radio station" requires a speaker that
   the product does not contain and does not ship with. It is true as a *network* claim and false as
   an *appliance* claim.
-- **No photograph.** The repo has ten board screen captures and a contact sheet
-  (`docs/images/screens/`), one panel PNG used as the site hero (`web/public/site/panel.png`), and
+- **No photograph.** The repo regenerates ten board screen captures and a contact sheet with
+  `npm run screens` (`docs/images/screens/`, not checked in), one panel PNG used as the site hero
+  (`web/public/site/panel.png`), and
   no photograph of a device — stated twice as a known hole
   (`docs/specs/k7-site.md:19-20,315`).
 

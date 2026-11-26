@@ -965,7 +965,8 @@ python3 tools/screen_over_http.py compare /tmp/before /tmp/after   # 0 px outsid
 ```
 
 The catalogue the docs use is the same ten scenes, photographed as PNGs into
-`docs/images/screens/` with a contact sheet beside them:
+`docs/images/screens/` with a contact sheet beside them — not checked in, since the command
+recreates them:
 
 ```bash
 npm run screens                                   # xtape.local:8000 -> docs/images/screens/

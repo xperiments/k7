@@ -142,7 +142,7 @@ before a photo exists.
 |---|---|---|
 | The live cassette SVG | hero, or the interactive panel | `web/src/ui/cassette-screen.tsx` |
 | The panel drawing (800×480) | social card, press kit, a section image | `resources/cassette-drawer-800x480.png` |
-| Ten board captures + contact sheet | the screen section, the press kit | `docs/images/screens/` |
+| Ten board captures + contact sheet | the screen section, the press kit | regenerate with `npm run screens` into `docs/images/screens/` (not checked in) |
 | The coverflow (CSS 3D) | the tape/library section, if a second interactive is wanted | `web/src/ui/album-shelf.tsx`; `docs/specs/k7-look.md:435-460` |
 | Four finished label designs | the label section | `assets/labels/templates/*.json`, `docs/label-*.png` |
 | The label renderer (LVGL in WASM) | "make a label" | `tools/LabelEditor/` |
