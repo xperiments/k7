@@ -3,9 +3,13 @@
 The words both contexts use. A context's own vocabulary is its own file —
 [`docs/specs/CONTEXT.md`](./docs/specs/CONTEXT.md) for the stream server, [`web/CONTEXT.md`](./web/CONTEXT.md)
 for the K7 app — and this file exists for the overlap: one definition per shared term, and the
-three words that mean different things on each side. It is a glossary, not a spec.
+two words that mean different things on each side. It is a glossary, not a spec.
 
 ## Shared, defined once
+
+**Card** — A removable volume whose `music` directory is the player's Library, and which the App
+can name for itself. A card out of the player is still the card; a Virtual card is one the App
+prepares before an SD is in the machine.
 
 **Factory pack** — The K7Arts the build ships: every `assets/k7art/` file, its label packed into
 the K7's embedded Label sheet and its J-card bundled into the App. Always present, never replaced
@@ -25,16 +29,16 @@ Additive: its sheet and J-cards join the pool behind the Factory pack's, and "Re
 removes it.
 
 **Cover** — The picture a Track carries. The App keeps it; the player never serves a picture, only
-paths and measurements, and prints it on the Card. The picture is the source, the print is the
+paths and measurements, and prints it on the Cassette. The picture is the source, the print is the
 rendering; a real Cover always wins over a J-card.
 
 ## Same word, two jobs
 
 | Word | Stream server | K7 app |
 |---|---|---|
-| **Card** | the drawn cassette on the white page | the removable volume whose `music` directory is the Library |
 | **Install** | putting a Panel into the composition | adding the App to a launcher |
 | **Track** | any of the three accepted source formats in the library tree | an MP3 or FLAC this browser analyzes |
 
-Written across contexts, qualify it: "the drawn Card" against "the card", "a panel Install"
-against "the app Install", "a library Track" against "a Track this browser can analyze".
+Written across contexts, qualify it: "a panel Install" against "the app Install", "a library
+Track" against "a Track this browser can analyze". The drawn object is the **Cassette**; the
+volume is the **Card**.

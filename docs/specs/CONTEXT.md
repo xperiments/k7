@@ -225,8 +225,8 @@ source of truth.
 _Avoid_: UI, GUI
 
 **Cassette screen**:
-The 800x480 drawing of a cassette that shows what is playing: two reels, two tape
-packs, a label and a **VU meter**. A presentation of the live stream, never a source of
+The 800x480 screen the **Cassette** sits in, showing what is playing: two reels, two tape packs,
+a label and a **VU meter**. A presentation of the live stream, never a source of
 truth.
 _Avoid_: UI, GUI, dashboard
 
@@ -428,23 +428,9 @@ Level settles the screen background fades from the cassette's colour to the cove
 backdrop, `k_col_cover_bg`.
 _Avoid_: big label, sticker, overlay, carátula
 
-**Artwork**:
-*(Parked with the removed Artwork screen, ADR 0019; the cover pipeline is not built.)*
-The Level that shows a **Track artwork** in the **Case**'s **Window**, with the cleaned
-filename on the band under the Case. It is not the **Label cover**: that is the K7
-sticker, and the Case stays even when the Track carries no picture.
-_Avoid_: cover, album art, portada
-
-**Case**:
-*(Parked with the removed Artwork screen, ADR 0019; the asset is not embedded.)*
-The cassette-case backdrop of the **Artwork** Level, `assets/labels/cover.jpg`,
-full-bleed at 800x480. Its **Window** is where the **Track artwork** shows.
-_Avoid_: frame, shell, background, funda
-
 **Window**:
-*(Parked with the removed Artwork screen, ADR 0019.)*
-The rectangle of the **Case** where the **Track artwork** is drawn: (101,23) to
-(704,408), 603x385. The picture is fitted cover-style and centre-cropped, never squeezed.
+The 291x87 pill at (203,157) cut in the **Cassette**'s print — 556x166 at the entry grid — where
+the tape shows through; it is the only place it does.
 _Avoid_: hole, cutout, slot, ventana
 
 **Track artwork**:
@@ -452,12 +438,12 @@ The picture a Track carries in its own file: an ID3v2.3/2.4 `APIC` frame in an M
 a native FLAC `PICTURE` block, and only the App's own `k7label` picture: cover art is
 ignored. JPEG is decoded; a PNG is
 located but not drawn. A Track with no usable picture leaves the **Cover** empty. The
-locator and fit are built on the panel board and tested on the host; the old **Artwork**
-Level that showed it is still parked.
+locator and fit are built on the panel board and tested on the host; the old Artwork Level
+that showed it is still parked.
 _Avoid_: album art, portada
 
-**Card**:
-The white page's cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
+**Cassette**:
+The white page's drawn cassette: one tinted rounded rectangle, 426x272 at (136,82), radius 12, drawn
 above the tape and under the **Cover**, which it carries at +12,+20. It has no picture of its
 own; its colours are a row of the palette table - a plastic, the label's fill and the ink it
 would print in - picked from the Track's path. Nothing is read off a picture (ADR 0040). With
@@ -469,24 +455,30 @@ window at (203,157) - 556x166 at the entry grid - is the only place the tape sho
 the label and the outer frame are the same rectangle, so there was nothing to colour.
 _Avoid_: plate, carcase
 
+**Card**:
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). The removable volume whose
+`music` directory is the Library; a **Virtual card** is one the App prepares before an SD is in
+the machine.
+_Avoid_: SD card (except for the physical medium), disk, volume
+
 **Cover**:
-Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). Here it is the print: the Track artwork scaled to the frame, clipped and masked on the Card — cinta < Card < label.
+Shared by both contexts — see [`GLOSSARY.md`](../../GLOSSARY.md). Here it is the print: the Track artwork scaled to the frame, clipped and masked on the Cassette — cinta < Cassette < label.
 
 _Avoid_: artwork screen, Case, portada
 
 **Label template**:
-The design the two-finger pose prints on the Card's print: the `label` section of a **K7Art**
+The design the two-finger pose prints on the Cassette's print: the `label` section of a **K7Art**
 ([`k7art.md`](./k7art.md)), a 748x359 design in `assets/k7art/`, authored in the **K7Art
 Editor**. Its prims are rects and texts, each in its own `#RRGGBB` colour, its texts bound to
 **Slots** or fixed, and its paper (the label section's `mask`) cut at the **Window** by the
-Card's own mask. A Track's template is a pick from the **Pool** — `ink_seed % (factory +
+Cassette's own mask. A Track's template is a pick from the **Pool** — `ink_seed % (factory +
 user)` — the same seed
 that picks its palette row, so shell and design always pair (ADR 0071). The layout is in
 [`label-templates.md`](./label-templates.md).
 _Avoid_: skin, theme, label design, cover, file (the **K7Art** is the file)
 
 **Canvas background**:
-The cassette's background while the two-finger pose shows a **Label template**: the Card's
+The cassette's background while the two-finger pose shows a **Label template**: the Cassette's
 plastic and mat, the window's rim and the 800x480 screen behind them. It is the label's, not the
 palette's: a list of up to eight colours, picked by the Track's cassette row (`row % count`); the
 editor's active one is only its preview. A label without one leaves the Track's cassette row

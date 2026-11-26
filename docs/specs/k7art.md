@@ -2,7 +2,7 @@
 
 **Status:** accepted · **Updated:** 2026-11-25
 
-A **K7Art** is one cassette artwork: the label the K7 prints on the Card at the two-finger
+A **K7Art** is one cassette artwork: the label the K7 prints on the Cassette at the two-finger
 pose, and the J-card the cassette case is sleeved with - one file, one id, two sections. It is
 authored in the **K7Art Editor** (`tools/LabelEditor/`, served at `/k7art`) and read by two
 consumers: `tools/label_pack.py` packs its `label` section into the factory **Label sheet**, and
@@ -14,7 +14,7 @@ the label section's binary, its vocabulary and its Slots; [`art-packs.md`](./art
 the pack a user publishes and the device that stores it.
 
 The vocabulary - **K7Art**, **J-card**, **J-card panel**, **J-card field** - is in
-[CONTEXT.md](./CONTEXT.md). The Card, the print and the Window are
+[CONTEXT.md](./CONTEXT.md). The Cassette, the print and the Window are
 [`cassette-card.md`](./cassette-card.md)'s.
 
 ## 1. The file
@@ -116,7 +116,7 @@ sheet. The sheet's binary, its version, its vocabulary, its Slots and every refu
   `space`, the `mask` and `aperture`, the optional `canvas`, the `fonts`, the `slots` and the
   `prims`. The packer takes the id and the name from the container and validates the
   section by the rules the label spec states.
-- **`space` is 748x359**, `mask` is the paper (§2) and `aperture` is the Card's window; both
+- **`space` is 748x359**, `mask` is the paper (§2) and `aperture` is the Cassette's window; both
   are always written. `canvas` is the optional list of up to eight cassette backgrounds,
   `fonts` is the three compiled pairs, `slots` is the eleven fields the design uses (each
   `max: 96`), and `prims` is the print. There is no `notes`: with every colour literal there
@@ -127,10 +127,10 @@ sheet. The sheet's binary, its version, its vocabulary, its Slots and every refu
   editor always writes it, so the sheet's prim count is the file's plus one, and the 48-prim
   cap is the sheet's.
 - **The window is fixed, and it is not a prim.** The section's `aperture` is always the
-  Card's window: (95,101) 556x166, radius 83. The editor draws it as an opaque black layer on
+  Cassette's window: (95,101) 556x166, radius 83. The editor draws it as an opaque black layer on
   top of the print, in Design and in Preview, so nothing drawn under it is seen; it cannot be
   selected, moved or removed. It is a placement aid, not a prim, and the sheet never paints
-  it: the Card's mask cuts the window on the device. A file may omit it; the editor supplies
+  it: the Cassette's mask cuts the window on the device. A file may omit it; the editor supplies
   it and writes it on Export.
 - **It is one design per Track**, chosen by `ink_seed` (ADR 0071). The J-card is the same
   design on paper; the pair is the K7Art.
@@ -216,7 +216,7 @@ stable name hash ([`art-packs.md`](./art-packs.md) §6).
 
 The **K7Art Editor** edits one K7Art as one document with two surfaces.
 
-- **The label surface is today's editor**: the 748x359 stage, the Card's window, the layers
+- **The label surface is today's editor**: the 748x359 stage, the Cassette's window, the layers
   and their colours, the type roles, the Slots and test values, the Design panel's paper, the
   fixed black window, the Canvas backgrounds, the LVGL preview and the label's export errors.
 - **The J-card surface is the one sheet**: 1300x1280, the fold guides at 320 and 480, a focus
@@ -275,7 +275,7 @@ at whatever size its surface has. The label section's refusals are the label spe
   `fill: "paper"` rect becomes the label's `mask`, the J-card's `paper` becomes `background`,
   and a J-card full-sheet paper rect is dropped because the background paints it. A design
   or document without a full-print paper rect gets the default paper, and an aperture layer
-  is dropped: the window is the Card's, not a layer. The editor writes v2; the packer, the
+  is dropped: the window is the Cassette's, not a layer. The editor writes v2; the packer, the
   firmware and the App never read v1.
 - **The editor's documents** (`label-editor.docs.v3`) migrate the same way on load and the
   store's key becomes `v4`. A document without a `jcard` gets the starter, from its own paper

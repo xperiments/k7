@@ -111,9 +111,8 @@ _Avoid_: mode, offline mode, connectivity
 ### The card
 
 **Card**:
-A removable volume whose `music` directory is the player's Library, and which this browser can
-name for itself. A card out of the player is still the card. A **Virtual card** is a Card the
-App prepares in a **Working directory** before an SD is in the machine.
+Shared by both contexts — see [`GLOSSARY.md`](../GLOSSARY.md). Here the browser can name the card for itself, and prepares a Virtual card in a Working directory before an SD is in the machine.
+
 _Avoid_: SD card (except for the object), volume, library, drive
 
 **Device card**:

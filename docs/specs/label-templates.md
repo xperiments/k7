@@ -2,7 +2,7 @@
 
 **Status:** accepted · **Updated:** 2026-11-25
 
-The cassette's **label** is the design the two-finger screen prints on the Card's print: the
+The cassette's **label** is the design the two-finger screen prints on the Cassette's print: the
 `label` section of a **K7Art** ([`k7art.md`](./k7art.md)), authored in the **K7Art Editor**
 (`tools/LabelEditor/`, served at `/k7art`), packed at build into the factory **Label sheet**,
 and read in place by `components/portable/label/`. The same K7Art carries the design's
@@ -14,15 +14,15 @@ with the editor, the packer and the reader. A user's **K7Art pack** ([`art-packs
 sheet of this format at runtime; it does not change this one.
 
 The vocabulary — **Label**, **Label sheet**, **Slot**, **K7Art** — is in
-[CONTEXT.md](./CONTEXT.md). The Card, the print and the window are
+[CONTEXT.md](./CONTEXT.md). The Cassette, the print and the window are
 [`cassette-card.md`](./cassette-card.md)'s; the pose is
 [ADR 0068](../adr/0068-the-picture-takes-the-panel-behind-two-fingers.md)'s.
 
 ## 1. The space
 
 A label is drawn in the **print's box at the entry grid: 748x359**, with the origin at the
-print's top-left. On the panel that box is (25,19) 748x359 — the Card at (-8,-23) 814x520 grown
-by its print offset (+33,+42) — and the Card's A8 mask cuts the window at **(95,101) 556x166,
+print's top-left. On the panel that box is (25,19) 748x359 — the Cassette at (-8,-23) 814x520 grown
+by its print offset (+33,+42) — and the Cassette's A8 mask cuts the window at **(95,101) 556x166,
 radius 83** in these coordinates.
 
 - **A prim may bleed past 748x359, and the print crops it.** A label is drawn the way a sleeve
@@ -32,17 +32,17 @@ radius 83** in these coordinates.
   with a grey dashed outline, and its row grey in the layer list, so the bleed is visible while
   it is drawn. The only positional refusals are the record's: `x` and `y` are int16, `w` and `h`
   uint16 (ADR 0072).
-- **The Card's window is fixed, and the editor always marks it.** It is
+- **The Cassette's window is fixed, and the editor always marks it.** It is
   `(95, 101, 556, 166, r 83)`; the label section's `aperture` always names it, and the editor
   writes it for every design, giving one to a file that omits it. The packer refuses anything
-  else. It is not stored in the sheet: the Card's mask already cuts the window, in both
+  else. It is not stored in the sheet: the Cassette's mask already cuts the window, in both
   layouts, and a second cut would be a second source of truth. The editor draws it as an
   opaque black layer on top of the print, in Design and in Preview; that black is the editor's
   guide, not a prim.
 - **Rotation is honoured**: `rot10` is tenths of a degree about the object's own centre
   (`transform_pivot` = width/2, height/2). A rotated object costs a layer per paint.
 - **The cassette's background is the label's own, at the two-finger pose.** A label may carry a
-  **canvas background** (§2): while the pose shows the tape, the Card's plastic, its mat and
+  **canvas background** (§2): while the pose shows the tape, the Cassette's plastic, its mat and
   front plate, the window's rim and the 800x480 screen behind them are that colour. It is
   outside the print and the print never crops it; it is not the label's paper, which is the
   mask's rect inside the print. A label without one leaves the Track's cassette row alone. The
@@ -346,7 +346,7 @@ what the device would print for that slot, which is why the editor's simulations
 ## 6. Rendering
 
 At the **two-finger pose only** (`controls.full`, the entry grid). The label's objects are
-children of the print — the 748x359 box the Cover uses — so they are cut by the Card's mask and
+children of the print — the 748x359 box the Cover uses — so they are cut by the Cassette's mask and
 by the print's own box exactly as a picture is.
 
 - **A rect** is a box with every style removed: `bg_color` = `lv_color_hex(p.colour)`, `bg_opa`
@@ -358,7 +358,7 @@ by the print's own box exactly as a picture is.
 - **The print's background stays the palette's label fill**; a design's paper is the mask's
   rect, a prim like any other, and the editor writes one for every design.
 - **The cassette's body is the label's canvas, and only at the two-finger pose.** When the
-  design carries canvases, the Card's plastic, its mat and front plate, the window's rim and the
+  design carries canvases, the Cassette's plastic, its mat and front plate, the window's rim and the
   800x480 screen behind them wear `canvas[cassette_row % count]` while the pose is up. The pose's
   exit restores the Track's cassette row (the plastic, the rim and the print's fallback); a Track
   change while the pose is up picks the next entry by the new row and repaints them. A design
@@ -396,7 +396,7 @@ different moments — that is why there are two — but the facts they refuse by
 | the id is not `k7.<slug>`, or the same id twice in a sheet | the folder is the set |
 | no `label` or no `jcard` | the design is the pair |
 | `space` is not 748x359 | the print is one box |
-| the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Card's |
+| the aperture is neither absent nor `(95,101,556,166,r83)` | the window is the Cassette's |
 | an aperture without a `mask` | there is no paper to cut the window out of |
 | a `mask` whose colour is not `#RRGGBB`, or whose radius is not a non-negative integer | the paper has no paint, or no such corner |
 | `canvas` is present but `backgrounds` is not one to eight `#RRGGBB` colours | there is no screen colour to paint |
@@ -422,6 +422,6 @@ different moments — that is why there are two — but the facts they refuse by
 | PSRAM | **0 B** — the factory sheet and a user pack's sheet are read in place from flash, like the Snapshot |
 | flash | the factory sheet (a few KB for a handful of designs) **plus the fonts**, which are the real cost: a 4 bpp Latin face at 36 px is tens of KB, and `font_jura_36.c` is 230 KB of source. A user pack reserves up to 1 MB of the `art` partition ([`art-packs.md`](./art-packs.md) §5) |
 | objects | at most `LABEL_PRIM_MAX` (48) per label design, alive only while the two-finger pose is up. The J-card is the App's DOM, not the firmware's |
-| canvas | 32 B per design (its eight-colour row); no object; the Card's plastic/mat and the window's rim are repainted on pose entry and on a Track change that changes the colour, the 800x480 page behind them with them |
+| canvas | 32 B per design (its eight-colour row); no object; the Cassette's plastic/mat and the window's rim are repainted on pose entry and on a Track change that changes the colour, the 800x480 page behind them with them |
 | per frame | **0** at the Controls pose. At the two-finger pose the reel tick redraws the print's area at 8 Hz (`CASSETTE_POSE_TICK_MS`), so the label is repainted with it - measured 11 ms a pass, and the label is not what that cost is made of |
 | per Track change | the print's 748x359 = 268,280 px repainted, once, at the two-finger pose; the pose's own entry is one 75 ms frame |
